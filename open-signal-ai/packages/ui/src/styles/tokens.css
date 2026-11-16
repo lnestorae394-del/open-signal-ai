@@ -1,0 +1,40 @@
+/*
+ * OPEN SIGNAL AI — design tokens.
+ * Colour values below are only the default theme; at runtime each bot's
+ * theme overrides the --os-* colour variables (see theme.ts).
+ */
+:root {
+  --os-primary: #e5243b;
+  --os-primary-rgb: 229 36 59;
+  --os-secondary: #ff4d5e;
+  --os-accent: #ff8a3d;
+  --os-bg: #050507;
+  --os-surface: #0c0c10;
+  --os-card: #13131a;
+  --os-text: #f4f4f6;
+  --os-text-muted: #8e8e9a;
+  --os-btn-from: #e5243b;
+  --os-btn-to: #ff5a36;
+  --os-on-primary: #ffffff;
+
+  /* Neutral, theme-independent */
+  --os-line: rgb(255 255 255 / 0.07);
+  --os-line-strong: rgb(255 255 255 / 0.13);
+  --os-success: #2fd37a;
+  --os-warning: #f5b544;
+  --os-danger: #ff5964;
+  --os-info: #6aa7ff;
+
+  --os-radius-sm: 10px;
+  --os-radius: 14px;
+  --os-radius-lg: 22px;
+  --os-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --os-font: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --os-font-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+
+  /* Telegram safe areas (set by the Mini App at runtime, 0 elsewhere) */
+  --tg-safe-top: 0px;
+  --tg-safe-bottom: 0px;
+  --tg-content-top: 0px;
+  --tg-content-bottom: 0px;
+}
