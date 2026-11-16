@@ -1,0 +1,17 @@
+{
+  "name": "@open-signal/miniapp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@open-signal/i18n": "0.1.0",
+    "@open-signal/shared": "0.1.0",
+    "@open-signal/ui": "0.1.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "zod": "3.25.76"
+  }
+}
