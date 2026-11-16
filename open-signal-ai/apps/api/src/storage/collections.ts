@@ -1,0 +1,30 @@
+/** Firestore collection names (single source of truth, see docs/firestore-schema.md). */
+export const C = {
+  bots: 'bots',
+  botConfigs: 'bot_configs',
+  users: 'users',
+  userSettings: 'user_settings',
+  marketData: 'market_data',
+  marketAnalyses: 'market_analyses',
+  simulationSessions: 'simulation_sessions',
+  simulationHistory: 'simulation_history',
+  academyCourses: 'academy_courses',
+  academyLessons: 'academy_lessons',
+  academyProgress: 'academy_progress',
+  adminUsers: 'admin_users',
+  auditLogs: 'audit_logs',
+  errorLogs: 'error_logs',
+  botEvents: 'bot_events',
+  botStatsDaily: 'bot_stats_daily',
+  media: 'media',
+  webhookUpdates: 'webhook_updates',
+  locks: 'locks',
+  partnerSources: 'partner_sources',
+  clickTokens: 'click_tokens',
+  postbackEvents: 'postback_events',
+  bindingClaims: 'binding_claims',
+  traderBindings: 'trader_bindings',
+  affiliateStatsDaily: 'affiliate_stats_daily',
+} as const;
+
+export type CollectionName = (typeof C)[keyof typeof C];

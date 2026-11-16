@@ -1,0 +1,31 @@
+{
+  "name": "open-signal-ai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OPEN SIGNAL AI \u2014 multi-tenant Telegram Mini App platform (admin panel + API + Mini App)",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run preflight && npm run dev -w @open-signal/api",
+    "dev:admin": "npm run dev -w @open-signal/admin",
+    "dev:miniapp": "npm run dev -w @open-signal/miniapp",
+    "seed:dev": "npm run seed:dev -w @open-signal/api",
+    "build": "npm run preflight && npm run build -w @open-signal/admin && npm run build -w @open-signal/miniapp",
+    "typecheck": "npm run preflight && tsc -p tsconfig.json --noEmit && npm run typecheck -w @open-signal/admin && npm run typecheck -w @open-signal/miniapp",
+    "test": "npm run preflight && node --test \"packages/*/test/**/*.test.ts\" \"apps/api/test/**/*.test.ts\"",
+    "check": "npm run typecheck && npm test && npm run build",
+    "preflight": "node scripts/check-node.mjs",
+    "audit:prod": "npm audit --omit=dev",
+    "audit:report": "npm audit --json > audit-report.json; npm audit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "^6.0.0"
+  }
+}

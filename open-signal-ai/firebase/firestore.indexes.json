@@ -1,0 +1,136 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "botId", "order": "ASCENDING" },
+        { "fieldPath": "bindingState", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "botId", "order": "ASCENDING" },
+        { "fieldPath": "lastSeenAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "click_tokens",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "botId", "order": "ASCENDING" },
+        { "fieldPath": "userDocId", "order": "ASCENDING" },
+        { "fieldPath": "expiresAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "binding_claims",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "botId", "order": "ASCENDING" },
+        { "fieldPath": "userDocId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "binding_claims",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "botId", "order": "ASCENDING" },
+        { "fieldPath": "traderIdHash", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "postback_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "botId", "order": "ASCENDING" },
+        { "fieldPath": "traderIdHash", "order": "ASCENDING" },
+        { "fieldPath": "eventType", "order": "ASCENDING" },
+        { "fieldPath": "receivedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "postback_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "botId", "order": "ASCENDING" },
+        { "fieldPath": "matchStatus", "order": "ASCENDING" },
+        { "fieldPath": "receivedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "market_analyses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "botId", "order": "ASCENDING" },
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "market_analyses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "botId", "order": "ASCENDING" },
+        { "fieldPath": "symbol", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "simulation_history",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "botId", "order": "ASCENDING" },
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "academy_lessons",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "botId", "order": "ASCENDING" },
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "order", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "botId", "order": "ASCENDING" },
+        { "fieldPath": "at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "error_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "botId", "order": "ASCENDING" },
+        { "fieldPath": "lastSeenAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bot_stats_daily",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "botId", "order": "ASCENDING" },
+        { "fieldPath": "day", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "webhook_updates",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    }
+  ]
+}
