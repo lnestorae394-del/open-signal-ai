@@ -1,0 +1,55 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  ALL_INSTRUMENTS,
+  DEFAULT_THEME,
+  FOREX_INSTRUMENTS,
+  OTC_INSTRUMENTS,
+  botTokenSchema,
+  botUsernameSchema,
+  forexSessionState,
+  themeSchema,
+} from '../src/index.ts';
+
+test('catalogue has the 21 requested Forex pairs and a separate OTC category', () => {
+  assert.equal(FOREX_INSTRUMENTS.length, 21);
+  assert.equal(OTC_INSTRUMENTS.length, 21);
+  assert.equal(new Set(ALL_INSTRUMENTS.map((i) => i.id)).size, 42, 'ids are unique');
+  for (const i of OTC_INSTRUMENTS) {
+    assert.equal(i.market, 'otc');
+    assert.equal(i.providerSymbol, null, 'OTC must not reuse Forex quotes');
+  }
+});
+
+test('forex calendar: closed on Saturday, open on Wednesday, edges at 22:00 UTC', () => {
+  assert.equal(forexSessionState(new Date('2026-11-14T12:00:00Z')).open, false); // Saturday
+  assert.equal(forexSessionState(new Date('2026-11-18T12:00:00Z')).open, true); // Wednesday
+  assert.equal(forexSessionState(new Date('2026-11-15T21:59:59Z')).open, false); // Sunday before open
+  assert.equal(forexSessionState(new Date('2026-11-15T22:00:00Z')).open, true); // Sunday open
+  assert.equal(forexSessionState(new Date('2026-11-20T21:59:59Z')).open, true); // Friday before close
+  assert.equal(forexSessionState(new Date('2026-11-20T22:00:00Z')).open, false); // Friday close
+});
+
+test('forex calendar: next state change is computed correctly', () => {
+  assert.equal(
+    forexSessionState(new Date('2026-11-14T12:00:00Z')).nextChangeAt.toISOString(),
+    '2026-11-15T22:00:00.000Z',
+  );
+  assert.equal(
+    forexSessionState(new Date('2026-11-18T12:00:00Z')).nextChangeAt.toISOString(),
+    '2026-11-20T22:00:00.000Z',
+  );
+  assert.equal(
+    forexSessionState(new Date('2026-11-20T23:00:00Z')).nextChangeAt.toISOString(),
+    '2026-11-22T22:00:00.000Z',
+  );
+});
+
+test('schemas: theme, token and username validation', () => {
+  assert.ok(themeSchema.safeParse(DEFAULT_THEME).success);
+  assert.equal(themeSchema.safeParse({ ...DEFAULT_THEME, primary: 'red' }).success, false);
+  assert.ok(botTokenSchema.safeParse('1234567890:AAH5YkoiEuPk8-FZa32hStHTqXiLPtAEhx8').success);
+  assert.equal(botTokenSchema.safeParse('not-a-token').success, false);
+  assert.ok(botUsernameSchema.safeParse('OpenSignalDemoBot').success);
+  assert.equal(botUsernameSchema.safeParse('open_signal').success, false);
+});
