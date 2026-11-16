@@ -1,0 +1,16 @@
+@import "tailwindcss";
+@import "../../../packages/ui/src/styles/tokens.css";
+@import "../../../packages/ui/src/styles/tailwind-theme.css";
+@import "../../../packages/ui/src/styles/base.css";
+
+@source "../../../packages/ui/src";
+
+/* Mini App shell: respects Telegram safe areas on iOS / Android / Desktop. */
+.app-shell {
+  min-height: var(--tg-viewport-stable-height, 100dvh);
+  padding-top: calc(var(--tg-safe-top) + var(--tg-content-top));
+  padding-bottom: calc(96px + var(--tg-safe-bottom) + var(--tg-content-bottom));
+}
+.bottom-nav {
+  padding-bottom: calc(10px + var(--tg-safe-bottom) + var(--tg-content-bottom));
+}
