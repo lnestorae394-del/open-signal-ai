@@ -1,0 +1,12 @@
+OPEN SIGNAL AI — Telegram authentication / onboarding fix
+
+Changes:
+- Inside Telegram, the Mini App now requires non-empty Telegram initData.
+- If Telegram session creation fails, the app shows an error and retry action instead of silently continuing as a guest.
+- Protected Mini App screens are not rendered inside Telegram without a verified server session.
+- Once the session is valid, onboarding continues to be selected from the server-side onboarding status.
+
+Notes:
+- Browser preview outside Telegram remains available as a guest preview.
+- This change does not alter Firestore data, bot tokens, partner links, postback sources, or Render environment variables.
+- Build/tests were not run in this environment: Node here is v22.16.0 while the project requires >=22.18.0, and dependencies are not installed.
