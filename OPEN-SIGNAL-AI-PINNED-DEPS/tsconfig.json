@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": [
+    "packages/shared/src/**/*.ts",
+    "packages/shared/test/**/*.ts",
+    "packages/i18n/src/**/*.ts",
+    "packages/i18n/test/**/*.ts",
+    "packages/ui/src/theme.ts",
+    "packages/ui/test/**/*.ts",
+    "apps/api/src/**/*.ts",
+    "apps/api/test/**/*.ts",
+    "apps/api/scripts/**/*.ts"
+  ]
+}
