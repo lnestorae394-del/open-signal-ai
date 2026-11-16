@@ -1,0 +1,35 @@
+{
+  "name": "open-signal-ai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OPEN SIGNAL AI — multi-tenant Telegram Mini App platform (admin panel + API + Mini App)",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "preflight": "node scripts/check-node.mjs",
+    "build": "npm run preflight && node scripts/build-web.mjs",
+    "start": "node apps/api/src/server.ts",
+    "dev": "npm run preflight && node scripts/dev.mjs",
+    "gen:secrets": "node apps/api/scripts/generate-secrets.ts",
+    "typecheck": "npm run preflight && tsc -p tsconfig.json --noEmit && npm run typecheck -w @open-signal/admin && npm run typecheck -w @open-signal/miniapp",
+    "test": "npm run build && node --test \"packages/*/test/**/*.test.ts\" \"apps/api/test/**/*.test.ts\"",
+    "test:firestore": "npm run build && OS_TEST_STORE=firestore node --test \"apps/api/test/**/*.test.ts\"",
+    "lock:check": "node scripts/check-lock.mjs",
+    "check": "npm run lock:check && npm run typecheck && npm test",
+    "audit:prod": "npm audit --omit=dev"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.0",
+    "@types/react": "19.2.0",
+    "@types/react-dom": "19.2.0",
+    "esbuild": "0.28.2",
+    "tailwindcss": "4.3.3",
+    "typescript": "6.0.3"
+  }
+}
