@@ -96,7 +96,7 @@ export class SignalService {
         nextChangeAt: session.nextChangeAt.toISOString(), timezone: POCKET_OPTION_TIMEZONE,
       });
     }
-    if (now.getTime() + periodSec * 1000 > session.nextChangeAt.getTime()) {
+    if (now.getTime() + periodSec * 1000 >= session.nextChangeAt.getTime()) {
       throw new AppError('FOREX_SESSION_ENDS_SOON', 'The selected expiry would cross the Forex session close', {
         nextChangeAt: session.nextChangeAt.toISOString(), timezone: POCKET_OPTION_TIMEZONE,
       });
