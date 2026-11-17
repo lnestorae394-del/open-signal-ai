@@ -128,7 +128,9 @@
     "clickMismatch": "This Trader ID was not registered through your link.",
     "traderIdTaken": "This Trader ID is already linked to another account.",
     "onboardingRequired": "Finish registration first.",
-    "signalCooldown": "You can get the next signal in {seconds} s."
+    "signalCooldown": "You can get the next signal in {seconds} s.",
+    "forexMarketClosed": "This Forex pair is closed according to Pocket Option's schedule. Choose OTC or wait for it to open.",
+    "forexSessionEndsSoon": "There is not enough time before the Forex session closes for this expiry. Choose a shorter expiry or OTC."
   },
   "admin": {
     "title": "Control center",
@@ -847,6 +849,9 @@
     "openedAt": "Trade opened at {time}",
     "doneTitle": "Trade time has expired",
     "doneText": "The trade on {symbol} has ended. Check the result in your broker's terminal.",
-    "next": "Get Next Signal"
+    "next": "Get Next Signal",
+    "forexOpenStatus": "Forex is open according to Pocket Option's schedule (UTC+2). OTC is available 24/7.",
+    "forexClosedStatus": "Forex is closed. Next opening: {time} (UTC+2). OTC is available 24/7.",
+    "forexTabClosed": "All regular Forex pairs are closed. Next opening: {time} (UTC+2). Switch to OTC."
   }
 }

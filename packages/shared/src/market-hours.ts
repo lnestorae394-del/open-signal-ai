@@ -1,49 +1,50 @@
 /**
- * Forex trading-week calendar.
- *
- * Retail spot FX trades continuously from Sunday ~22:00 UTC to Friday ~22:00 UTC.
- * This function is a deterministic calendar rule, not market data. It does NOT
- * know about bank holidays or liquidity gaps: the UI labels it accordingly and
- * the market-data provider's own market state (Stage 4) takes precedence.
+ * Simple Forex availability window used by OPEN SIGNAL AI.
+ * Pocket Option server time is treated as fixed UTC+2.
+ * Forex: Monday-Friday, 02:00-22:45. OTC is not checked here.
  */
-export const FOREX_OPEN_UTC = { weekday: 0, hour: 22 } as const; // Sunday 22:00 UTC
-export const FOREX_CLOSE_UTC = { weekday: 5, hour: 22 } as const; // Friday 22:00 UTC
+const HOUR = 3_600_000;
+const MINUTE = 60_000;
+const DAY = 24 * HOUR;
+const OFFSET_MS = 2 * HOUR;
+
+export const POCKET_OPTION_TIMEZONE = 'UTC+2';
+export const FOREX_OPEN_MINUTE = 2 * 60;
+export const FOREX_CLOSE_MINUTE = 22 * 60 + 45;
 
 export interface ForexSessionState {
   open: boolean;
-  /** Next change of state (open → close or close → open), UTC. */
   nextChangeAt: Date;
+  opensAt: string;
+  closesAt: string;
+  timezone: typeof POCKET_OPTION_TIMEZONE;
 }
 
-const HOUR = 3_600_000;
-const WEEK = 7 * 24 * HOUR;
+export function forexSessionState(now: Date = new Date(), _instrumentId?: string): ForexSessionState {
+  const serverNow = new Date(now.getTime() + OFFSET_MS);
+  const weekday = serverNow.getUTCDay();
+  const minuteOfDay = serverNow.getUTCHours() * 60 + serverNow.getUTCMinutes();
+  const serverDayStartUtc = Date.UTC(serverNow.getUTCFullYear(), serverNow.getUTCMonth(), serverNow.getUTCDate()) - OFFSET_MS;
+  const weekdayOpen = weekday >= 1 && weekday <= 5;
+  const open = weekdayOpen && minuteOfDay >= FOREX_OPEN_MINUTE && minuteOfDay < FOREX_CLOSE_MINUTE;
 
-/** Milliseconds since Sunday 00:00 UTC of the current week. */
-function weekOffset(d: Date): number {
-  return (
-    d.getUTCDay() * 24 * HOUR +
-    d.getUTCHours() * HOUR +
-    d.getUTCMinutes() * 60_000 +
-    d.getUTCSeconds() * 1000 +
-    d.getUTCMilliseconds()
-  );
-}
-
-export function forexSessionState(now: Date = new Date()): ForexSessionState {
-  const offset = weekOffset(now);
-  const openAt = FOREX_OPEN_UTC.weekday * 24 * HOUR + FOREX_OPEN_UTC.hour * HOUR;
-  const closeAt = FOREX_CLOSE_UTC.weekday * 24 * HOUR + FOREX_CLOSE_UTC.hour * HOUR;
-  const weekStart = now.getTime() - offset;
-
-  // Weeks start on Sunday 00:00 UTC, so the open window is [Sun 22:00, Fri 22:00).
-  const open = offset >= openAt && offset < closeAt;
-  let next: number;
+  let nextChangeAt: Date;
   if (open) {
-    next = weekStart + closeAt;
-  } else if (offset < openAt) {
-    next = weekStart + openAt; // Sunday before the open
+    nextChangeAt = new Date(serverDayStartUtc + FOREX_CLOSE_MINUTE * MINUTE);
   } else {
-    next = weekStart + WEEK + openAt; // after Friday close → next Sunday
+    let daysAhead: number;
+    if (weekday === 0) daysAhead = 1; // Sunday -> Monday
+    else if (weekday === 6) daysAhead = 2; // Saturday -> Monday
+    else if (minuteOfDay < FOREX_OPEN_MINUTE) daysAhead = 0; // before today's opening
+    else daysAhead = weekday === 5 ? 3 : 1; // after close; Friday -> Monday
+    nextChangeAt = new Date(serverDayStartUtc + daysAhead * DAY + FOREX_OPEN_MINUTE * MINUTE);
   }
-  return { open, nextChangeAt: new Date(next) };
+
+  return {
+    open,
+    nextChangeAt,
+    opensAt: '02:00',
+    closesAt: '22:45',
+    timezone: POCKET_OPTION_TIMEZONE,
+  };
 }

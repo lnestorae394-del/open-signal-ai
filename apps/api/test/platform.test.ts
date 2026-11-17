@@ -353,6 +353,48 @@ test('signals: settings shared by all bots; BUY/SELL marked as training; open �
   assert.equal((await send()).json.error.code, 'SIGNAL_LIMIT');
 });
 
+test('Pocket Option Forex hours are enforced by the API while OTC remains available 24/7', async () => {
+  // 22:40 on the broker's UTC+2 clock: Forex is open, but a 10-minute expiry
+  // would cross the 22:45 close. OTC has no market-hours restriction.
+  const h = harness(defaultStore(), new TestClock('2026-11-18T20:40:00.000Z'));
+  const bot = await seedBot(h.s, 'botHours');
+  const src = await seedGlobalSource(h.s);
+  const { token } = await onboard(h, bot, src, 78, '50078000', '25');
+  const auth = { headers: bearer(token) };
+
+  const cfg = (await h.request('GET', `/api/miniapp/${bot.botId}/signals/config`, auth)).json;
+  assert.equal(cfg.forexTimezone, 'UTC+2');
+  assert.equal(cfg.forexSessions.EURUSD.open, true);
+  assert.equal(cfg.forexSessions.EURUSD.closesAt, '22:45');
+
+  const wouldCrossClose = await h.request('POST', `/api/miniapp/${bot.botId}/signals`, {
+    ...auth, body: { instrumentId: 'EURUSD', periodSec: 600 },
+  });
+  assert.equal(wouldCrossClose.status, 409);
+  assert.equal(wouldCrossClose.json.error.code, 'FOREX_SESSION_ENDS_SOON');
+
+  const otcBeforeClose = await h.request('POST', `/api/miniapp/${bot.botId}/signals`, {
+    ...auth, body: { instrumentId: 'EURUSD_OTC', periodSec: 600 },
+  });
+  assert.equal(otcBeforeClose.status, 201, 'OTC remains open even when Forex is near close');
+
+  h.clock.advance(5 * 60); // 22:45 UTC+2 exactly
+  const cfgClosed = (await h.request('GET', `/api/miniapp/${bot.botId}/signals/config`, auth)).json;
+  assert.equal(cfgClosed.forexSessions.EURUSD.open, false);
+  assert.equal(cfgClosed.forexSessions.EURUSD.nextChangeAt, '2026-11-19T00:00:00.000Z');
+
+  const forexClosed = await h.request('POST', `/api/miniapp/${bot.botId}/signals`, {
+    ...auth, body: { instrumentId: 'EURUSD', periodSec: 60 },
+  });
+  assert.equal(forexClosed.status, 409);
+  assert.equal(forexClosed.json.error.code, 'FOREX_MARKET_CLOSED');
+
+  const otcAfterClose = await h.request('POST', `/api/miniapp/${bot.botId}/signals`, {
+    ...auth, body: { instrumentId: 'EURUSD_OTC', periodSec: 60 },
+  });
+  assert.equal(otcAfterClose.status, 201, 'OTC remains open after the Forex close');
+});
+
 // ───────────────────────── academy (shared by every bot) ─────────────────────────
 
 test('academy: one catalogue for all bots (starter course until edited), progress per user in the database', async () => {
