@@ -244,15 +244,24 @@ test('global postback source: one per platform, secret shown once, Pocket Partne
   const link = (await h.request('POST', `/api/miniapp/${botId}/onboarding/register`, { headers: { authorization: `Bearer ${t21}` } })).json.link as string;
   const click = new URL(link).searchParams.get('click_id')!;
   assert.equal((await h.request('GET', `/postback/${source.id}?key=${secret}&event=reg&click_id=${click}&trader_id=777001`)).status, 200);
-  assert.equal((await h.request('GET', `/postback/${source.id}?key=${secret}&event=reg&click_id=unknownclickid00000000&trader_id=777002`)).status, 400);
+  // Academy rule (default): a registration without our click_id is kept with an unknown owner, not rejected.
+  assert.equal((await h.request('GET', `/postback/${source.id}?key=${secret}&event=reg&click_id=unknownclickid00000000&trader_id=777002`)).status, 200);
 
   const events = (await h.request('GET', '/api/admin/postback/events', { headers: { cookie } })).json.events;
-  assert.equal(events.length, 1);
-  assert.equal(events[0].eventType, 'registration');
-  assert.equal(events[0].clickTelegramId, 21);
-  assert.equal(events[0].global, true);
+  assert.equal(events.length, 2);
+  const mine = events.find((e: { clickTelegramId: number | null }) => e.clickTelegramId === 21);
+  assert.equal(mine.eventType, 'registration');
+  assert.equal(mine.global, true);
+  const unclaimed = events.find((e: { diagnosis: string }) => e.diagnosis === 'registration_unclaimed');
+  assert.equal(unclaimed.botName, '—', 'no bot until somebody links this Trader ID');
+
+  // Strict mode (Academy rule switched off in Signals settings): an unknown click_id is rejected again.
+  const settings = (await h.request('GET', '/api/admin/settings/signals', { headers: { cookie } })).json.settings;
+  const put = await h.request('PUT', '/api/admin/settings/signals', { headers: { ...CSRF, cookie }, body: { ...settings, allowClicklessRegistration: false } });
+  assert.equal(put.status, 200, JSON.stringify(put.json));
+  assert.equal((await h.request('GET', `/postback/${source.id}?key=${secret}&event=reg&click_id=unknownclickid00000000&trader_id=777003`)).status, 400);
   const errors = (await h.request('GET', '/api/admin/postback/errors', { headers: { cookie } })).json.items;
-  assert.ok(errors.some((e: { code: string; global: boolean }) => e.code === 'UNKNOWN_CLICK' && e.global));
+  assert.ok(errors.some((e: { code: string; global: boolean }) => e.code === 'CLICK_NOT_FOUND' && e.global));
 
   // A user without click_id proof can be linked only by an administrator, with a reason (audited).
   await login(22);

@@ -45,6 +45,8 @@ export interface DepositSummary {
   ftdAt: string | null;
   depositsCount: number;
   lastDepositAt: string | null;
+  /** Sum of all credited deposits in USD (amounts without a currency count as USD). Absent on summaries saved before it existed. */
+  totalAmount?: number;
   /** A delivery of an already processed event carried a different amount/currency (possible tampering). */
   conflict?: boolean;
   updatedAt: string;
@@ -89,6 +91,24 @@ export interface UserRecord {
   lastBindingError?: { code: string; at: string } | null;
   bindingAttempts?: number;
   deposit?: DepositSummary | null;
+  /**
+   * Access to signals granted by an admin (technical problem, stuck step). A separate
+   * permission: it never touches the binding, the deposit or onboardingCompletedAt.
+   * Absent for users who never had it.
+   */
+  manualAccess?: ManualAccess | null;
+  /** Mirror of manualAccess.active for the admin "manual access" filter. */
+  manualAccessActive?: boolean;
+}
+
+export interface ManualAccess {
+  active: boolean;
+  grantedAt: string;
+  grantedBy: string;
+  grantReason: string;
+  revokedAt: string | null;
+  revokedBy: string | null;
+  revokeReason: string | null;
 }
 
 /** user_settings/{botId}_{telegramId} */

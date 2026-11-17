@@ -1,3 +1,4 @@
+import { hasSignalAccess } from '../binding/access.ts';
 import { randomBytes } from 'node:crypto';
 import { FOREX_INSTRUMENTS, OTC_INSTRUMENTS, type SignalCategory, type SignalEngineKind, type SignalSettings } from '@open-signal/shared';
 import { AppError } from '../lib/errors.ts';
@@ -74,9 +75,9 @@ export class SignalService {
     };
   }
 
-  /** Signals are available only after onboarding (server-side check, not a UI flag). */
+  /** Signals are available only after onboarding or with manual access from an admin (server-side check, not a UI flag). */
   private requireOnboarded(user: UserRecord): void {
-    if (!user.onboardingCompletedAt) throw new AppError('ONBOARDING_REQUIRED');
+    if (!hasSignalAccess(user)) throw new AppError('ONBOARDING_REQUIRED');
   }
 
   async issue(scope: TenantScope, user: UserRecord, raw: { instrumentId?: unknown; periodSec?: unknown }): Promise<SignalView> {

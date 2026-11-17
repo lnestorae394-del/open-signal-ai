@@ -1,3 +1,4 @@
+import { accessView, hasSignalAccess } from '../binding/access.ts';
 import { traderIdInputSchema } from '@open-signal/shared';
 import { AppError } from '../lib/errors.ts';
 import type { Services } from '../app.ts';
@@ -67,11 +68,13 @@ export function buildRoutes(s: Services): Route[] {
       settings: settingsView(settings),
       binding: s.binding.view(fresh, bundle.config),
       onboarding,
+      // Normal onboarding OR access granted manually by an admin (server-side rule, see binding/access.ts).
+      access: accessView(fresh),
       academy: { done: Object.keys(progress).filter((id) => ids.has(id)).length, total },
     };
   };
   const requireOnboarded = (user: UserRecord) => {
-    if (!user.onboardingCompletedAt) throw new AppError('ONBOARDING_REQUIRED');
+    if (!hasSignalAccess(user)) throw new AppError('ONBOARDING_REQUIRED');
   };
 
   return [
@@ -289,6 +292,18 @@ export function buildRoutes(s: Services): Route[] {
       },
     },
 
+    // `/postback?key=…` — the source is found by its key (URL form from the Pocket Partners cabinet).
+    ...(['GET', 'POST'] as const).map(
+      (method): Route => ({
+        method,
+        path: '/postback',
+        rateLimit: 'postback',
+        handler: async (ctx) => {
+          const r = await s.binding.processPostbackByKey({ method, rawQuery: ctx.rawQuery, headers: ctx.req.headers, rawBody: ctx.req.rawBody, ip: ctx.req.ip });
+          return ok(r.body, r.status);
+        },
+      }),
+    ),
     ...(['GET', 'POST'] as const).map(
       (method): Route => ({
         method,

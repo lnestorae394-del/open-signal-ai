@@ -84,6 +84,23 @@ test('keys built from enums exist in every language (statuses, permissions, outc
     ['admin.permissions', shared.MANAGER_PERMISSIONS],
     ['admin.postback.eventType', shared.POSTBACK_EVENT_TYPES],
     ['admin.postback.match', ['matched', 'awaiting_confirmation', 'unmatched', 'conflict', 'review']],
+    ['admin.access', ['confirmed', 'manual', 'revoked', 'needs_review', 'checking', 'awaiting_deposit', 'awaiting_trader_id', 'awaiting_registration']],
+    ['admin.postback.diagnosis', [
+      'matched_click', 'matched_trader_id', 'registration_awaiting', 'deposit_unmatched', 'click_missing',
+      'click_not_found', 'click_expired', 'click_other_user', 'trader_not_bound', 'trader_ambiguous',
+      'registration_unclaimed', 'matched_pending',
+    ]],
+    ['admin.users.reg', ['confirmed', 'started', 'not_started']],
+    ['admin.users.source', ['deposit', 'manual', 'both', 'none']],
+    ['admin.postback.errCode', ['CLICK_MISSING', 'CLICK_NOT_FOUND', 'CLICK_EXPIRED', 'CLICK_OTHER_USER', 'TRADER_NOT_BOUND', 'TRADER_AMBIGUOUS', 'DEPOSIT_UNMATCHED']],
+    ['admin.userCard.action', ['grant', 'revoke', 'step_trader_id', 'step_registration', 'bind', 'unbind', 'recheck']],
+    ['admin.userCard.hint', ['grant', 'revoke', 'step_trader_id', 'step_registration', 'bind', 'unbind', 'recheck']],
+    ['admin.userCard.done', ['grant', 'revoke', 'step_trader_id', 'step_registration', 'bind', 'unbind', 'recheck']],
+    ['admin.userCard.via', ['onboarding', 'manual', 'none']],
+    ['admin.userCard.audit', [
+      'access.manual_grant', 'access.manual_revoke', 'onboarding.set_step', 'finance.deposit_recheck',
+      'binding.admin_bind', 'binding.rebind', 'binding.unbind', 'binding.release',
+    ]],
   ];
   const missing: string[] = [];
   for (const lang of ['ru', 'uk', 'en'] as const) {

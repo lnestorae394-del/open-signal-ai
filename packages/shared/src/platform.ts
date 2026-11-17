@@ -20,6 +20,12 @@ export const signalSettingsSchema = z
     maxPerDay: z.number().int().min(1).max(1000),
     /** The app (signals, academy) opens only after a confirmed first deposit of at least $10. */
     requireFtd: z.boolean(),
+    /**
+     * Hidden Dinox Academy rule: a registration postback WITHOUT our click_id is kept with an
+     * unknown owner, and the first user who enters that Trader ID links it (one account per
+     * Trader ID across all bots). Off = a registration must carry the user's own click_id.
+     */
+    allowClicklessRegistration: z.boolean(),
   })
   .refine((s) => s.forexInstruments.length + s.otcInstruments.length > 0, { message: 'at least one instrument', path: ['forexInstruments'] })
   .refine((s) => s.periods.includes(s.defaultPeriod), { message: 'default period must be enabled', path: ['defaultPeriod'] })
@@ -35,6 +41,7 @@ export const DEFAULT_SIGNAL_SETTINGS: SignalSettings = {
   cooldownSec: 30,
   maxPerDay: 50,
   requireFtd: true,
+  allowClicklessRegistration: true,
 };
 
 // ───────────────────────── academy (shared by every bot) ─────────────────────────

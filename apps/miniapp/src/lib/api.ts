@@ -47,6 +47,8 @@ export interface Me {
   settings: Settings;
   binding: BindingView;
   onboarding: OnboardingView;
+  /** Access to signals: normal onboarding or granted manually by an admin. */
+  access?: { signals: boolean; via: 'onboarding' | 'manual' | null };
   academy: { done: number; total: number };
 }
 

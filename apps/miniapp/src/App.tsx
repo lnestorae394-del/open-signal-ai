@@ -19,17 +19,19 @@ function Centered({ children }: { children: ReactNode }) {
 
 export function App() {
   const { phase, tab, setTab, t, retry, me, config } = useApp();
+  // Server decides: normal onboarding completed, or access granted manually by an admin.
+  const hasAccess = me?.onboarding.status === 'completed' || me?.access?.signals === true;
 
   // Telegram BackButton on secondary tabs returns to Signals.
   useEffect(() => {
     const bb = getWebApp()?.BackButton;
-    if (!bb || !isInsideTelegram() || me?.onboarding.status !== 'completed') return;
+    if (!bb || !isInsideTelegram() || !hasAccess) return;
     const back = () => setTab('signals');
     if (tab === 'signals') bb.hide();
     else bb.show();
     bb.onClick(back);
     return () => bb.offClick(back);
-  }, [tab, setTab, me?.onboarding.status]);
+  }, [tab, setTab, hasAccess]);
 
   if (phase.kind === 'loading') {
     return (
@@ -66,13 +68,16 @@ export function App() {
     );
   }
 
-  // Onboarding is mandatory and chosen from the server-side state on every launch.
-  if (me.onboarding.status !== 'completed') return <OnboardingScreen />;
+  // Onboarding is mandatory and chosen from the server-side state on every launch
+  // (an admin may grant access manually: me.access, checked again by the server on every signal).
+  if (!hasAccess) return <OnboardingScreen />;
+  // Manual access: the user may still link the account (then deposits count and access becomes normal).
+  if (tab === 'connect' && me.onboarding.status !== 'completed') return <OnboardingScreen />;
 
   return (
     <div className="app-shell os-canvas">
       <main className="mx-auto max-w-lg">
-        {tab === 'signals' && <SignalsScreen />}
+        {(tab === 'signals' || tab === 'connect') && <SignalsScreen />}
         {tab === 'academy' && <AcademyScreen />}
         {tab === 'profile' && <ProfileScreen />}
       </main>

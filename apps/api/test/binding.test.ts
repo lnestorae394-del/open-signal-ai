@@ -107,14 +107,22 @@ test("someone else's registration: Trader ID registered via user A's link cannot
   assert.equal((await user(h, bot.botId, 4)).traderId, '70003333');
 });
 
-test('registration without any click_id cannot be linked by anyone (no proof of ownership)', async () => {
+test('registration without any click_id (Academy rule): the first user who enters it links it; strict mode refuses', async () => {
   const h = harness();
   const bot = await seedBot(h.s, 'botLegacy');
   const src = await seedSource(h.s, bot.botId, 'partner-legacy'); // a per-bot source: click_id optional
   const pb = (p: Record<string, string>) => h.request('GET', `/postback/${src.sourceId}?${new URLSearchParams({ token: src.secret, ...p })}`);
   assert.equal((await pb({ event: 'reg', trader_id: 'NOCLICK1' })).status, 200);
   const { token } = await h.login(bot, 6);
-  assert.equal((await submit(h, bot, token, 'NOCLICK1')).json.error.code, 'CLICK_MISMATCH');
+  assert.equal((await submit(h, bot, token, 'NOCLICK1')).json.binding.state, 'account_bound');
+  const second = await h.login(bot, 7);
+  assert.equal((await submit(h, bot, second.token, 'NOCLICK1')).json.error.code, 'TRADER_ID_TAKEN', 'one account per Trader ID');
+  // Strict mode: a registration without our click_id is not enough.
+  const owner = { uid: 'o', email: 'o@example.com', role: 'owner' as const, botPermissions: {} };
+  await h.s.platform.updateSignals(owner, { ...(await h.s.platform.signals()), allowClicklessRegistration: false });
+  assert.equal((await pb({ event: 'reg', trader_id: 'NOCLICK2' })).status, 200);
+  const third = await h.login(bot, 8);
+  assert.equal((await submit(h, bot, third.token, 'NOCLICK2')).json.error.code, 'CLICK_MISMATCH');
 });
 
 test('bound user cannot replace their Trader ID; relaunch and another device keep everything', async () => {
@@ -187,51 +195,51 @@ type Ev = { eventType: string; amount: number | null; possibleDuplicateOf?: stri
 const events = async (h: Harness, type: string) =>
   (await h.store.query<Ev>(C.postbackEvents, { where: [{ field: 'eventType', op: '==', value: type }] })).sort((a, b) => String(a.data['receivedAt' as never]).localeCompare(String(b.data['receivedAt' as never])));
 
-test('two REAL repeat deposits of the same amount are both counted (no event id from the partner): nothing is lost', async () => {
+test('repeat deposit with the same amount within 10 minutes (no event id): kept, NOT counted twice automatically; nothing is lost', async () => {
   const { h, bot, src } = await setup();
   const u = await boundUser(h, bot, src, 11, '70009999');
   await pp(h, src, { event: 'ftd', click_id: u.click, trader_id: '70009999', sumdep: '50' });
   const dep = () => pp(h, src, { event: 'dep', click_id: u.click, trader_id: '70009999', sumdep: '100' });
   assert.equal((await dep()).json.duplicate, false);
   h.clock.advance(60);
-  assert.equal((await dep()).json.duplicate, false, 'same amount one minute later: a second real deposit is possible, so it is counted');
+  assert.equal((await dep()).status, 200, 'same amount one minute later: stored');
   h.clock.advance(1);
   assert.equal((await pp(h, src, { event: 'dep', click_id: u.click, trader_id: '70009999', sumdep: '40' })).json.duplicate, false);
   h.clock.advance(11 * 60);
-  assert.equal((await dep()).json.duplicate, false);
+  assert.equal((await dep()).json.duplicate, false, 'same amount after the window: a new deposit');
   const d = (await me(h, bot, u.token)).json.onboarding.deposit;
-  assert.equal(d.depositsCount, 5, 'FTD + 4 repeat deposits');
-  assert.equal(d.status, 'redeposit');
+  assert.equal(d.depositsCount, 4, 'FTD + 3 repeat deposits; the possible re-delivery waits for the admin');
   assert.equal(d.ftdAmount, 50, 'FTD stays the first deposit');
-  // The one that could be a re-delivery is flagged for an admin, but counted.
   const deps = await events(h, 'redeposit');
-  assert.equal(deps.length, 4);
+  assert.equal(deps.length, 4, 'every delivery is stored');
   assert.deepEqual(deps.map((e) => Boolean(e.data.possibleDuplicateOf)), [false, true, false, false]);
   const errs = await h.store.query<{ code: string }>(C.errorLogs, { where: [{ field: 'module', op: '==', value: 'postback' }] });
   assert.ok(errs.some((e) => e.data.code === 'POSSIBLE_DUPLICATE'), 'admin sees it in "Integration errors"');
 });
 
-test('admin can exclude a flagged re-delivery (reason + audit) and restore it; totals are recomputed, nothing deleted', async () => {
+test('admin confirms a held repeat deposit (reason + audit) or excludes any deposit; totals are recomputed, nothing deleted', async () => {
   const { h, bot, src } = await setup();
   const u = await boundUser(h, bot, src, 14, '70011111');
   await pp(h, src, { event: 'ftd', click_id: u.click, trader_id: '70011111', sumdep: '20' });
   await pp(h, src, { event: 'dep', click_id: u.click, trader_id: '70011111', sumdep: '30' });
   h.clock.advance(5);
   await pp(h, src, { event: 'dep', click_id: u.click, trader_id: '70011111', sumdep: '30' });
-  const flagged = (await events(h, 'redeposit')).find((e) => e.data.possibleDuplicateOf)!;
-  await assert.rejects(h.s.binding.adminSetEventExcluded(OWNER, flagged.id, { excluded: true, reason: '' }), (e: AppError) => e.code === 'BAD_REQUEST');
-  const manager = { uid: 'm1', role: 'manager' as const, botPermissions: { [bot.botId]: ['users.view' as const] } };
-  await assert.rejects(h.s.binding.adminSetEventExcluded(manager, flagged.id, { excluded: true, reason: 'retry of the same deposit' }), (e: AppError) => e.code === 'FORBIDDEN');
-  await h.s.binding.adminSetEventExcluded(OWNER, flagged.id, { excluded: true, reason: 'retry of the same deposit' });
+  const held = (await events(h, 'redeposit')).find((e) => e.data.possibleDuplicateOf)!;
+  assert.deepEqual((held.data.excluded as { reason: string }).reason, 'possible_repeat');
   assert.equal((await me(h, bot, u.token)).json.onboarding.deposit.depositsCount, 2);
-  assert.equal((await user(h, bot.botId, 14)).deposit?.conflict, undefined);
-  assert.equal((await events(h, 'redeposit')).length, 2, 'the event is kept');
-  await h.s.binding.adminSetEventExcluded(OWNER, flagged.id, { excluded: false, reason: 'it was a real deposit' });
+  await assert.rejects(h.s.binding.adminSetEventExcluded(OWNER, held.id, { excluded: false, reason: '' }), (e: AppError) => e.code === 'BAD_REQUEST');
+  const manager = { uid: 'm1', role: 'manager' as const, botPermissions: { [bot.botId]: ['users.view' as const] } };
+  await assert.rejects(h.s.binding.adminSetEventExcluded(manager, held.id, { excluded: false, reason: 'it was a real deposit' }), (e: AppError) => e.code === 'FORBIDDEN');
+  await h.s.binding.adminSetEventExcluded(OWNER, held.id, { excluded: false, reason: 'it was a real deposit' });
   assert.equal((await me(h, bot, u.token)).json.onboarding.deposit.depositsCount, 3);
+  assert.equal((await me(h, bot, u.token)).json.onboarding.deposit.ftdAmount, 20);
+  await h.s.binding.adminSetEventExcluded(OWNER, held.id, { excluded: true, reason: 'retry of the same deposit after all' });
+  assert.equal((await me(h, bot, u.token)).json.onboarding.deposit.depositsCount, 2);
+  assert.equal((await events(h, 'redeposit')).length, 2, 'the event is kept');
   const audit = await h.store.query<{ action: string; reason: string }>(C.auditLogs, {});
-  assert.ok(audit.some((a) => a.data.action === 'finance.event_excluded' && a.data.reason === 'retry of the same deposit'));
-  assert.ok(audit.some((a) => a.data.action === 'finance.event_restored'));
-  // FTD and registration cannot be excluded through this action? FTD can (it is a deposit); registration cannot.
+  assert.ok(audit.some((a) => a.data.action === 'finance.event_restored' && a.data.reason === 'it was a real deposit'));
+  assert.ok(audit.some((a) => a.data.action === 'finance.event_excluded'));
+  // Registration is not a deposit: cannot be excluded.
   const reg = (await events(h, 'registration'))[0]!;
   await assert.rejects(h.s.binding.adminSetEventExcluded(OWNER, reg.id, { excluded: true, reason: 'not a deposit' }), (e: AppError) => e.code === 'VALIDATION_FAILED');
 });
@@ -294,8 +302,9 @@ test('deposit with another user’s click_id is not credited to the Trader ID ho
   await pp(h, src, { event: 'ftd', click_id: clickB, trader_id: '70010000', sumdep: '30' });
   const d = (await me(h, bot, a.token)).json.onboarding.deposit;
   assert.equal(d.check, 'awaiting');
-  const ev = (await h.store.query<{ matchStatus: string }>(C.postbackEvents, { where: [{ field: 'eventType', op: '==', value: 'ftd' }] }))[0]!;
-  assert.equal(ev.data.matchStatus, 'unmatched');
+  const ev = (await h.store.query<{ matchStatus: string; diagnosis: string }>(C.postbackEvents, { where: [{ field: 'eventType', op: '==', value: 'ftd' }] }))[0]!;
+  assert.equal(ev.data.matchStatus, 'conflict');
+  assert.equal(ev.data.diagnosis, 'click_other_user');
 });
 
 test('one global postback for all bots: events go to the bot of the click_id; bots stay isolated', async () => {
@@ -317,11 +326,12 @@ test('one global postback for all bots: events go to the bot of the click_id; bo
   const events = await h.store.query<{ botId: string; globalSource: boolean }>(C.postbackEvents, {});
   assert.deepEqual(new Set(events.map((e) => e.data.botId)), new Set([botA.botId, botB.botId]));
   assert.ok(events.every((e) => e.data.globalSource === true));
-  // Unknown click_id → rejected and visible as an integration error.
+  // Unknown click_id (Academy rule): kept without a bot until somebody links this Trader ID.
   const bad = await pp(h, src, { event: 'reg', click_id: 'AAAAAAAAAAAAAAAAAAAAAA', trader_id: '80003333' });
-  assert.equal(bad.status, 400);
-  const errs = await h.store.query<{ botId: string; code: string }>(C.errorLogs, {});
-  assert.ok(errs.some((e) => e.data.botId === 'global' && e.data.code === 'UNKNOWN_CLICK'));
+  assert.equal(bad.status, 200);
+  const unclaimed = (await h.store.query<{ botId: string; diagnosis: string; traderIdNorm: string }>(C.postbackEvents, {})).find((e) => e.data.traderIdNorm === '80003333')!;
+  assert.equal(unclaimed.data.botId, 'global');
+  assert.equal(unclaimed.data.diagnosis, 'registration_unclaimed');
 });
 
 test('global postback, 3 bots: every event (reg, FTD, redeposit) lands only in the bot of its click_id', async () => {
@@ -342,7 +352,7 @@ test('global postback, 3 bots: every event (reg, FTD, redeposit) lands only in t
     await pp(h, src, { event: 'ftd', click_id: u.click, trader_id: u.tid, sumdep: String(10 * (i + 2)) });
     for (let k = 0; k < i; k++) {
       h.clock.advance(1);
-      await pp(h, src, { event: 'dep', click_id: u.click, trader_id: u.tid, sumdep: '5' });
+      await pp(h, src, { event: 'dep', click_id: u.click, trader_id: u.tid, sumdep: String(5 + k) }); // different amounts: same amount within 10 min would be held as a possible repeat
     }
   }
   for (const [i, u] of users.entries()) {
@@ -353,9 +363,10 @@ test('global postback, 3 bots: every event (reg, FTD, redeposit) lands only in t
   // A Trader ID of bot 1 reported with the click_id of bot 2 is NOT credited in bot 1 (and not in bot 2: nobody holds it there).
   await pp(h, src, { event: 'dep', click_id: users[1]!.click, trader_id: users[0]!.tid, sumdep: '999' });
   assert.equal((await me(h, users[0]!.bot, users[0]!.token)).json.onboarding.deposit.depositsCount, 1);
-  const cross = (await h.store.query<{ botId: string; matchStatus: string; amount: number }>(C.postbackEvents, { where: [{ field: 'eventType', op: '==', value: 'redeposit' }] })).find((e) => e.data.amount === 999)!;
+  const cross = (await h.store.query<{ botId: string; matchStatus: string; amount: number; diagnosis: string }>(C.postbackEvents, { where: [{ field: 'eventType', op: '==', value: 'redeposit' }] })).find((e) => e.data.amount === 999)!;
   assert.equal(cross.data.botId, users[1]!.bot.botId, 'routed by click_id');
-  assert.equal(cross.data.matchStatus, 'unmatched');
+  assert.equal(cross.data.matchStatus, 'conflict');
+  assert.equal(cross.data.diagnosis, 'click_other_user', 'the Trader ID is linked in another bot: no bypass through the Trader ID');
 });
 
 test('click_id robustness: upper-cased by the partner still matches; former 22-char ids still work; expired / unknown → 400 + integration error', async () => {
@@ -378,9 +389,12 @@ test('click_id robustness: upper-cased by the partner still matches; former 22-c
   const lateClick = await register(h, bot, late.token);
   h.clock.advance(91 * 24 * 3600);
   const r = await pp(h, src, { event: 'reg', click_id: lateClick, trader_id: '70033000' });
-  assert.equal(r.status, 400);
-  const errs = await h.store.query<{ code: string }>(C.errorLogs, {});
-  assert.ok(errs.some((e) => e.data.code === 'UNKNOWN_CLICK'));
+  assert.equal(r.status, 200, 'our click_id still names the owner after it expired (Academy rule)');
+  const late2 = await h.login(bot, 33);
+  assert.equal((await submit(h, bot, late2.token, '70033000')).json.binding.state, 'account_bound');
+  const other = await h.login(bot, 34);
+  await pp(h, src, { event: 'reg', click_id: lateClick, trader_id: '70034000' });
+  assert.equal((await submit(h, bot, other.token, '70034000')).json.error.code, 'CLICK_MISMATCH', 'registered through user 33’s link');
 });
 
 test('existing users after the update: each lands on the right onboarding step', async () => {

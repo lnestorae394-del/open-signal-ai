@@ -8,6 +8,9 @@ import type { DocumentStore, Filter } from '../storage/types.ts';
 import { writeAudit } from '../domain/audit.ts';
 import type { BotConfigRecord, BotRecord, UserRecord } from '../domain/records.ts';
 import { depositCheck, onboardingStatus } from '../binding/onboarding.ts';
+import { accessView } from '../binding/access.ts';
+import { TenantScope } from '../domain/tenant.ts';
+import type { DepositCheckStatus, OnboardingStatus } from '@open-signal/shared';
 import type { PlatformSettings } from '../platform/settings.ts';
 import { secretAad } from '../binding/postback.ts';
 import { GLOBAL_LOG_BOT_ID, GLOBAL_SOURCE_BOT_ID, maskTraderId, type ClaimRecord, type PostbackEventRecord } from '../binding/service.ts';
@@ -83,7 +86,7 @@ export class AdminInsights {
     };
   }
 
-  async users(actor: AdminActor, botId: string, opts: { state?: string | null; before?: string | null }) {
+  async users(actor: AdminActor, botId: string, opts: { state?: string | null; access?: string | null; before?: string | null }) {
     requirePermission(actor, botId, 'users.view');
     return this.userRows(actor, [botId], opts);
   }
@@ -92,22 +95,31 @@ export class AdminInsights {
    * Users of every bot the admin may see (or one bot). Columns: Telegram ID, bot,
    * Trader ID, registration date, onboarding, verification and deposit status.
    */
-  async allUsers(actor: AdminActor, opts: { botId?: string | null; state?: string | null; before?: string | null }) {
+  async allUsers(actor: AdminActor, opts: { botId?: string | null; state?: string | null; access?: string | null; before?: string | null }) {
     if (opts.botId) return this.users(actor, opts.botId, opts);
     const bots = (await this.store.query<BotRecord>(C.bots, {})).map((b) => b.id).filter((id) => can(actor, id, 'users.view'));
     if (!bots.length) return { users: [], nextBefore: null };
     return this.userRows(actor, actor.role === 'owner' ? null : bots.slice(0, 30), opts);
   }
 
-  private async userRows(actor: AdminActor, botIds: string[] | null, opts: { state?: string | null; before?: string | null }) {
+  private async userRows(actor: AdminActor, botIds: string[] | null, opts: { state?: string | null; access?: string | null; before?: string | null }) {
     const where: Filter[] = [];
     if (botIds) where.push(botIds.length === 1 ? { field: 'botId', op: '==', value: botIds[0]! } : { field: 'botId', op: 'in', value: botIds });
     if (opts.state) {
       if (!(BINDING_STATES as readonly string[]).includes(opts.state)) throw new AppError('VALIDATION_FAILED', 'unknown state');
       where.push({ field: 'bindingState', op: '==', value: opts.state });
     }
+    if (opts.access) {
+      if (opts.access !== 'manual') throw new AppError('VALIDATION_FAILED', 'unknown access filter');
+      where.push({ field: 'manualAccessActive', op: '==', value: true });
+    }
     if (opts.before) where.push({ field: 'createdAt', op: '<', value: opts.before });
     const rows = await this.store.query<UserRecord>(C.users, { where, orderBy: { field: 'createdAt', direction: 'desc' }, limit: 50 });
+    return { users: await this.rowsFor(actor, rows), nextBefore: rows.length === 50 ? rows[rows.length - 1]!.data.createdAt : null };
+  }
+
+  /** Admin view of user records: the same statuses in the list and in the user card. */
+  private async rowsFor(actor: AdminActor, rows: { id: string; data: UserRecord }[]) {
     const { requireFtd } = await this.platform.signals();
     const configs = new Map<string, BotConfigRecord | null>();
     const configOf = async (id: string) => {
@@ -117,8 +129,20 @@ export class AdminInsights {
       }
       return configs.get(id) ?? null;
     };
+    // Latest click_id of every user on the page (one query per 30 users; ids are not secrets, the partner sees them anyway).
+    const clickOf = new Map<string, { id: string; at: string }>();
+    const ids = rows.map((r) => r.id);
+    for (let i = 0; i < ids.length; i += 30) {
+      const chunk = ids.slice(i, i + 30);
+      const clicks = await this.store.query<{ userDocId: string; createdAt: string; lastClickAt?: string | null }>(C.clickTokens, { where: [{ field: 'userDocId', op: 'in', value: chunk }], limit: 300 });
+      for (const c of clicks) {
+        const at = c.data.lastClickAt ?? c.data.createdAt;
+        const prev = clickOf.get(c.data.userDocId);
+        if (!prev || at > prev.at) clickOf.set(c.data.userDocId, { id: c.id, at });
+      }
+    }
     const out = [];
-    for (const { data: u } of rows) {
+    for (const { id: userDocId, data: u } of rows) {
       const cfg = await configOf(u.botId);
       const check = depositCheck(u.deposit ?? null);
       const status = onboardingStatus(u, check.status, requireFtd);
@@ -148,10 +172,64 @@ export class AdminInsights {
         traderId: u.traderId ? (can(actor, u.botId, 'binding.manage') ? u.traderId : maskTraderId(u.traderId)) : (u.submittedTraderIdMasked ?? null),
         traderIdMasked: u.traderId ? maskTraderId(u.traderId) : (u.submittedTraderIdMasked ?? null),
         registrationStartedAt: u.registrationStartedAt ?? null,
-        deposit: u.deposit ? { status: u.deposit.status, ftdAmount: u.deposit.ftdAmount, ftdCurrency: u.deposit.ftdCurrency, ftdAt: u.deposit.ftdAt, depositsCount: u.deposit.depositsCount } : null,
+        deposit: u.deposit ? { status: u.deposit.status, ftdAmount: u.deposit.ftdAmount, ftdCurrency: u.deposit.ftdCurrency, ftdAt: u.deposit.ftdAt, depositsCount: u.deposit.depositsCount, totalAmount: u.deposit.totalAmount ?? null } : null,
+        clickId: clickOf.get(userDocId)?.id ?? null,
+        // Partner registration: confirmed (Trader ID linked) · link opened · not started.
+        registrationStatus: u.traderId ? 'confirmed' : u.registrationStartedAt ? 'started' : 'not_started',
+        accessStatus: accessStatus(u, status, check.status),
+        access: accessView(u),
+        manualAccessActive: u.manualAccess?.active === true,
+        canManage: can(actor, u.botId, 'binding.manage'),
       });
     }
-    return { users: out, nextBefore: rows.length === 50 ? rows[rows.length - 1]!.data.createdAt : null };
+    return out;
+  }
+
+  /**
+   * One user, for the admin user card: every status, manual access (who / when / why) and
+   * the last manual admin action on this user. No secrets, full Trader ID only with binding.manage.
+   */
+  async userCard(actor: AdminActor, botId: string, telegramId: number) {
+    if (!can(actor, botId, 'users.view')) throw new AppError('FORBIDDEN');
+    if (!Number.isSafeInteger(telegramId) || telegramId <= 0) throw new AppError('NOT_FOUND');
+    const scope = new TenantScope(botId);
+    const uid = scope.userDocId(telegramId);
+    const u = await this.store.get<UserRecord>(C.users, uid);
+    if (!u || !scope.owns(u)) throw new AppError('NOT_FOUND', 'user not found');
+    const row = (await this.rowsFor(actor, [{ id: uid, data: u }]))[0]!;
+    const audit = (await this.store.query<{ botId: string; action: string; actor: { type: string; id: string }; reason: string | null; at: string }>(C.auditLogs, {
+      where: [{ field: 'target', op: '==', value: uid }],
+      limit: 200,
+    }))
+      .map((a) => a.data)
+      .filter((a) => a.botId === botId && a.actor.type === 'admin' && MANUAL_ACTIONS.includes(a.action))
+      .sort((a, b) => (a.at < b.at ? 1 : -1));
+    const emails = new Map<string, string>();
+    const emailOf = async (adminUid: string | null | undefined) => {
+      if (!adminUid) return null;
+      if (!emails.has(adminUid)) emails.set(adminUid, (await this.store.get<{ email: string }>(C.adminUsers, adminUid))?.email ?? adminUid);
+      return emails.get(adminUid)!;
+    };
+    const m = u.manualAccess ?? null;
+    const last = audit[0] ?? null;
+    return {
+      ...row,
+      lastName: u.lastName,
+      bindingUpdatedAt: u.bindingUpdatedAt,
+      onboardingCompletedAt: u.onboardingCompletedAt ?? null,
+      manualAccess: m
+        ? {
+            active: m.active,
+            grantedAt: m.grantedAt,
+            grantedBy: await emailOf(m.grantedBy),
+            grantReason: m.grantReason,
+            revokedAt: m.revokedAt,
+            revokedBy: await emailOf(m.revokedBy),
+            revokeReason: m.revokeReason,
+          }
+        : null,
+      lastManualAction: last ? { action: last.action, at: last.at, by: await emailOf(last.actor.id), reason: last.reason } : null,
+    };
   }
 
   /** System parameters for the Settings page (no secrets, only whether they are set). */
@@ -263,7 +341,7 @@ export class AdminInsights {
       events.push({
         id,
         botId: e.botId,
-        botName: await nameOf(e.botId),
+        botName: e.botId === GLOBAL_LOG_BOT_ID ? '—' : await nameOf(e.botId),
         sourceId: e.sourceId,
         global: e.globalSource === true,
         eventType: e.eventType,
@@ -278,6 +356,8 @@ export class AdminInsights {
         deliveryCount: e.deliveryCount,
         conflictingDelivery: e.conflictingDelivery ?? null,
         possibleDuplicate: Boolean(e.possibleDuplicateOf),
+        diagnosis: e.diagnosis ?? null,
+        routedBy: e.routedBy ?? null,
         excluded: e.excluded ? { at: e.excluded.at, reason: e.excluded.reason } : null,
         canExclude: (e.eventType === 'ftd' || e.eventType === 'redeposit') && can(actor, e.botId, 'binding.manage'),
         receivedAt: e.receivedAt,
@@ -436,4 +516,24 @@ function parseSourceInput(raw: unknown): SourceInput {
   }
   if (global && !mapping.clickId) throw new AppError('VALIDATION_FAILED', 'global source requires click_id mapping');
   return { name, authMethod, authName, ipAllowlist: ips, mapping, eventTypeMap, global };
+}
+
+/** Admin actions on one user that the user card reports as "last manual action". */
+const MANUAL_ACTIONS = [
+  'access.manual_grant', 'access.manual_revoke', 'onboarding.set_step', 'finance.deposit_recheck',
+  'binding.admin_bind', 'binding.rebind', 'binding.unbind', 'binding.release',
+];
+
+/**
+ * One status for the admin list: normal access first, then manual access, then the onboarding step.
+ *  confirmed · manual · revoked · needs_review · checking · awaiting_deposit · awaiting_trader_id · awaiting_registration
+ */
+export function accessStatus(u: UserRecord, status: OnboardingStatus, check: DepositCheckStatus): string {
+  if (u.onboardingCompletedAt || status === 'completed') return 'confirmed';
+  if (u.manualAccess?.active) return 'manual';
+  if (u.manualAccess && !u.manualAccess.active) return 'revoked';
+  if (status === 'needs_support') return 'needs_review';
+  if (status === 'deposit') return check === 'checking' ? 'checking' : check === 'error' ? 'needs_review' : 'awaiting_deposit';
+  if (status === 'trader_id') return 'awaiting_trader_id';
+  return 'awaiting_registration';
 }

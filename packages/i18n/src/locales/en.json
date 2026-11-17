@@ -82,7 +82,10 @@
     "registrationNot": "Not confirmed",
     "ftd": "FTD status",
     "amount": "Confirmed amount",
-    "riskNote": "Trading carries a high risk of losing money. Signals and materials are for training and do not guarantee profit."
+    "riskNote": "Trading carries a high risk of losing money. Signals and materials are for training and do not guarantee profit.",
+    "manualTitle": "Access opened by an administrator",
+    "manualText": "Linking your trading account is not finished. Finish it so that access is kept by your deposit.",
+    "manualConnect": "Link account"
   },
   "binding": {
     "state": {
@@ -298,7 +301,32 @@
       "allBots": "All bots",
       "onboarding": "Onboarding",
       "verification": "Verification",
-      "deposit": "Deposit"
+      "deposit": "Deposit",
+      "accessFilter": "Signal access",
+      "accessAll": "Any access",
+      "accessManual": "Granted manually",
+      "access": "Access",
+      "manage": "Manage",
+      "close": "Collapse",
+      "depositsTotal": "Deposits total",
+      "registration": "Registration",
+      "accessSource": "Access source",
+      "actions": "Actions",
+      "reg": {
+        "confirmed": "Confirmed",
+        "started": "Link opened",
+        "not_started": "Not started"
+      },
+      "source": {
+        "deposit": "Deposit",
+        "manual": "Granted manually",
+        "both": "Deposit + manual",
+        "none": "—"
+      },
+      "grantAccess": "Grant access",
+      "revokeAccess": "Revoke access",
+      "grantConfirm": "Open signals for this user without registration or deposit?",
+      "revokeConfirm": "Revoke manual access? If the deposit is confirmed, normal access stays."
     },
     "stats": {
       "launches": "Mini App launches",
@@ -585,14 +613,38 @@
         "UNKNOWN_CLICK": "Unknown or expired click_id",
         "BAD_EVENT": "Invalid event data",
         "AMOUNT_CONFLICT": "Event re-sent with another amount",
-        "POSSIBLE_DUPLICATE": "Possible repeat deposit (counted, check the history)"
+        "POSSIBLE_DUPLICATE": "Possible repeat deposit (counted, check the history)",
+        "CLICK_MISSING": "Registration without click_id",
+        "CLICK_NOT_FOUND": "Click ID not found",
+        "CLICK_EXPIRED": "Click ID expired",
+        "CLICK_OTHER_USER": "Click ID belongs to another user",
+        "TRADER_NOT_BOUND": "Deposit: Trader ID not linked",
+        "TRADER_AMBIGUOUS": "Deposit: Trader ID found in several bots",
+        "DEPOSIT_UNMATCHED": "Deposit received but not matched"
       },
       "possibleDuplicate": "Possible repeat",
       "excluded": "Excluded from totals",
       "exclude": "Exclude",
       "restore": "Count again",
       "reason": "Reason",
-      "reasonPlaceholder": "Reason (5+ characters)"
+      "reasonPlaceholder": "Reason (5+ characters)",
+      "diagnosis": {
+        "matched_click": "Matched by click_id",
+        "matched_trader_id": "Deposit matched by the linked Trader ID",
+        "registration_awaiting": "Registration received, the user has not entered the Trader ID yet",
+        "deposit_unmatched": "Deposit received but not matched: Trader ID not linked yet (credited after linking)",
+        "click_missing": "No click_id",
+        "click_not_found": "Click ID not found",
+        "click_expired": "Click ID expired",
+        "click_other_user": "Click ID belongs to another user — not credited",
+        "trader_not_bound": "Trader ID not linked — not credited",
+        "trader_ambiguous": "Trader ID linked in several bots — not credited",
+        "registration_unclaimed": "Registration without click_id: waits for the user who enters this Trader ID",
+        "matched_pending": "Deposit waited for the Trader ID link and was credited after it"
+      },
+      "heldRepeat": "Possible repeat — not counted",
+      "heldRepeatHint": "Same Trader ID and amount within 10 minutes. If it is a separate deposit, press “Count it”.",
+      "countRepeat": "Count it"
     },
     "academy": {
       "title": "Academy",
@@ -636,7 +688,87 @@
       "maxPerDay": "Signals per user per day",
       "requireFtd": "Open the app only after a confirmed FTD",
       "requireFtdHint": "On: after the Trader ID check the user waits for a confirmed first deposit of $10 or more. Off: the app opens right after the Trader ID check.",
-      "saved": "Saved. Applies to every bot."
+      "saved": "Saved. Applies to every bot.",
+      "clickless": "Accept registrations without click_id",
+      "clicklessHint": "As in Hidden Dinox Academy: a Pocket Partners registration without our click_id is kept, and the first user who enters that Trader ID links it (one Trader ID — one account across all bots). Turn off to accept only registrations made through the user’s personal link."
+    },
+    "access": {
+      "confirmed": "Confirmed",
+      "manual": "Granted manually",
+      "revoked": "Access revoked",
+      "needs_review": "Needs review",
+      "checking": "Checking",
+      "awaiting_deposit": "Awaiting deposit",
+      "awaiting_trader_id": "Awaiting Trader ID",
+      "awaiting_registration": "Awaiting registration"
+    },
+    "userCard": {
+      "name": "Name and username",
+      "registration": "Registration",
+      "registrationNotStarted": "Has not opened the link",
+      "amount": "Confirmed deposit",
+      "access": "Signal access",
+      "via": {
+        "onboarding": "Normal (onboarding completed)",
+        "manual": "Granted manually",
+        "none": "None"
+      },
+      "manualTitle": "Manual access",
+      "grantedBy": "Granted by {by}, {at}",
+      "revokedBy": "Revoked by {by}, {at}",
+      "lastAction": "Last manual action: {action} — {by}, {at}",
+      "audit": {
+        "access": {
+          "manual_grant": "manual access granted",
+          "manual_revoke": "manual access revoked"
+        },
+        "onboarding": {
+          "set_step": "onboarding step changed"
+        },
+        "finance": {
+          "deposit_recheck": "deposit re-checked"
+        },
+        "binding": {
+          "admin_bind": "Trader ID linked manually",
+          "rebind": "Trader ID replaced",
+          "unbind": "Trader ID unlinked",
+          "release": "Trader ID moved to another user"
+        }
+      },
+      "actions": "Actions",
+      "noPermission": "Manual actions need the \"Manage bindings\" permission for this bot.",
+      "action": {
+        "grant": "Grant access",
+        "revoke": "Revoke access",
+        "step_trader_id": "Move to Trader ID input",
+        "step_registration": "Restart onboarding",
+        "bind": "Link Trader ID manually",
+        "unbind": "Unlink Trader ID",
+        "recheck": "Re-check deposit"
+      },
+      "hint": {
+        "grant": "A separate permission for a technical problem. Deposit, Trader ID and onboarding status stay as they are.",
+        "revoke": "Removes only the manual permission. If onboarding is completed, access stays.",
+        "step_trader_id": "The user registered but the app did not move on to step 2.",
+        "step_registration": "Back to step 1. Registrations and deposits at the partner are not removed.",
+        "bind": "The Trader ID fails verification because of a technical problem and you have confirmed the account is theirs.",
+        "unbind": "Back to Trader ID input. Events and deposits are kept.",
+        "recheck": "Recompute the deposit from partner events already received. Confirms nothing without partner data."
+      },
+      "releaseFromOther": "The Trader ID is linked to another user — unlink it there",
+      "reason": "Reason",
+      "reasonPlaceholder": "Reason (5+ characters, saved to the audit log)",
+      "confirm": "The action runs on the server and is written to the audit log with your name and the reason.",
+      "confirmButton": "Confirm",
+      "done": {
+        "grant": "Access granted manually.",
+        "revoke": "Manual access revoked.",
+        "step_trader_id": "The user is now at Trader ID input.",
+        "step_registration": "Onboarding restarts from step 1.",
+        "bind": "Trader ID linked.",
+        "unbind": "Trader ID unlinked.",
+        "recheck": "Deposit recomputed from partner events."
+      }
     }
   },
   "bot": {
@@ -697,24 +829,24 @@
     "openBot": "Open {username}"
   },
   "sig": {
-    "pair": "Trading pair",
+    "pair": "Trading Pair",
     "change": "Change",
     "choosePair": "Choose a pair",
-    "time": "Trade duration",
-    "get": "Get signal",
-    "analyzing": "Analysing the selected pair",
-    "preparing": "Preparing a training signal",
-    "progress": "Preparing the signal",
-    "trainingShort": "No market data is connected — this is a training signal.",
-    "trainingBadge": "Training signal",
-    "trainingNote": "Training mode: no market data or analytical model is connected, so the direction is not based on market analysis. This is not investment advice or a promise of profit.",
-    "buyHint": "Trade on a rise",
-    "sellHint": "Trade on a fall",
-    "opened": "I opened the trade",
-    "skip": "Skip, new signal",
+    "time": "Trade Duration",
+    "get": "Get Signal",
+    "analyzing": "Analyzing the selected pair",
+    "preparing": "Preparing signal",
+    "progress": "Signal preparation",
+    "trainingShort": "Market data connected",
+    "trainingBadge": "Signal",
+    "trainingNote": "Analysis is based on current market data and technical indicators. Market conditions may change, so signals do not guarantee results and do not constitute investment advice.",
+    "buyHint": "Trade upward",
+    "sellHint": "Trade downward",
+    "opened": "Trade opened",
+    "skip": "Don't open, get a new signal",
     "openedAt": "Trade opened at {time}",
-    "doneTitle": "Trade time is over",
-    "doneText": "The {symbol} trade has ended. Check the result in your broker terminal.",
-    "next": "Get the next signal"
+    "doneTitle": "Trade time has expired",
+    "doneText": "The trade on {symbol} has ended. Check the result in your broker's terminal.",
+    "next": "Get Next Signal"
   }
 }

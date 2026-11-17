@@ -5,7 +5,8 @@ import { applyTheme } from '@open-signal/ui/theme';
 import { ApiError, api, safeStorage, type Me, type OnboardingView, type Settings } from './lib/api.ts';
 import { getWebApp, initTelegram, isInsideTelegram, resolveBotId } from './lib/telegram.ts';
 
-export type Tab = 'signals' | 'academy' | 'profile';
+/** 'connect': a user with manual access finishes linking the account (opened from the profile). */
+export type Tab = 'signals' | 'academy' | 'profile' | 'connect';
 
 type Phase =
   | { kind: 'loading' }

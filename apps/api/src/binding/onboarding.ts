@@ -118,7 +118,7 @@ export class OnboardingService {
       });
       summary = summarizeDeposits(events.map((e) => e.data).filter((e) => scope.owns(e) && attributable(e, uid)), this.now().toISOString());
       const prev = user.deposit;
-      if (!prev || prev.depositsCount !== summary.depositsCount || prev.status !== summary.status || Boolean(prev.conflict) !== Boolean(summary.conflict)) {
+      if (!prev || prev.depositsCount !== summary.depositsCount || prev.status !== summary.status || Boolean(prev.conflict) !== Boolean(summary.conflict) || prev.totalAmount !== summary.totalAmount) {
         await this.store.update(C.users, uid, { deposit: summary });
       }
     }

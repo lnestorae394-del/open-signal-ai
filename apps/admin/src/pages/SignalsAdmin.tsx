@@ -100,6 +100,13 @@ export function SignalsAdminPage() {
               <span className="mt-0.5 block text-muted">{t('admin.signals.requireFtdHint')}</span>
             </span>
           </label>
+          <label className="mt-4 flex items-start gap-3 text-[14px]">
+            <Switch checked={form.allowClicklessRegistration} disabled={!owner} onChange={(v) => set('allowClicklessRegistration', v)} label={t('admin.signals.clickless')} />
+            <span>
+              <span className="block font-medium">{t('admin.signals.clickless')}</span>
+              <span className="mt-0.5 block text-muted">{t('admin.signals.clicklessHint')}</span>
+            </span>
+          </label>
         </Panel>
         {msg ? <Notice tone={msg.tone}>{msg.text}</Notice> : null}
         {owner ? (

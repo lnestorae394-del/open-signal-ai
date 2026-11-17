@@ -36,6 +36,9 @@ interface EventRow {
   deliveryCount: number;
   conflictingDelivery: { amount: number | null; currency: string | null; at: string } | null;
   possibleDuplicate?: boolean;
+  /** Why the event was or was not credited (events stored before this field have none). */
+  diagnosis?: string | null;
+  routedBy?: 'click_id' | 'trader_id' | 'source' | null;
   excluded?: { at: string; reason: string } | null;
   canExclude?: boolean;
   receivedAt: string;
@@ -319,11 +322,12 @@ function EventsPanel() {
                   <td className="px-4 py-3">
                     <div className="flex flex-col items-start gap-1.5">
                       <Badge tone={MATCH_TONE[e.matchStatus] ?? 'neutral'}>{t(`admin.postback.match.${e.matchStatus}`)}</Badge>
+                      {e.diagnosis ? <div className="max-w-[240px] text-[12px] text-muted">{t(`admin.postback.diagnosis.${e.diagnosis}`)}</div> : null}
                       {e.possibleDuplicate && !e.excluded ? <Badge tone="warning">{t('admin.postback.possibleDuplicate')}</Badge> : null}
                       {e.excluded ? (
                         <div className="text-[12px] text-muted">
-                          <Badge tone="neutral">{t('admin.postback.excluded')}</Badge>
-                          <div className="mt-1 max-w-[220px]">{e.excluded.reason}</div>
+                          <Badge tone={e.excluded.reason === 'possible_repeat' ? 'warning' : 'neutral'}>{e.excluded.reason === 'possible_repeat' ? t('admin.postback.heldRepeat') : t('admin.postback.excluded')}</Badge>
+                          <div className="mt-1 max-w-[220px]">{e.excluded.reason === 'possible_repeat' ? t('admin.postback.heldRepeatHint') : e.excluded.reason}</div>
                         </div>
                       ) : null}
                       {e.canExclude ? <ExcludeControl row={e} onDone={(x) => setRows((prev) => prev?.map((r) => (r.id === e.id ? { ...r, excluded: x } : r)) ?? prev)} /> : null}
@@ -356,7 +360,7 @@ function ExcludeControl({ row, onDone }: { row: EventRow; onDone: (excluded: Eve
   if (!open) {
     return (
       <Button size="sm" variant="ghost" onClick={() => setOpen(true)}>
-        {exclude ? t('admin.postback.exclude') : t('admin.postback.restore')}
+        {exclude ? t('admin.postback.exclude') : row.excluded?.reason === 'possible_repeat' ? t('admin.postback.countRepeat') : t('admin.postback.restore')}
       </Button>
     );
   }

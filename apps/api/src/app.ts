@@ -101,7 +101,9 @@ export function buildServices(opts: BuildOptions): Services {
   const stats = new StatsBuffer(store, logger, now);
   const errors = new ErrorLog(store, logger);
   const telegram = new TelegramBotApi(env.TELEGRAM_API_BASE, opts.telegramFetch ?? fetch);
-  const binding = new BindingService({ store, bots, box, logger, stats, errors, now });
+  // Read lazily: the platform settings service is created further down.
+  let platformRef: PlatformSettings | null = null;
+  const binding = new BindingService({ store, bots, box, logger, stats, errors, now, clicklessRegistration: async () => (platformRef ? (await platformRef.signals()).allowClicklessRegistration : true) });
   const users = new UserService(store);
   const handler =
     opts.updateHandler ??
@@ -113,6 +115,7 @@ export function buildServices(opts: BuildOptions): Services {
       savedLanguage: async (botId, tgId) => (await store.get<{ language: string | null }>(C.userSettings, `${botId}_${tgId}`))?.language ?? null,
     });
   const platform = new PlatformSettings({ store, now });
+  platformRef = platform;
   // Training engine until a verified market data source and a validated model exist.
   const engine: SignalEngine = opts.signalEngine ?? new TrainingSignalEngine();
   const webhooks = new WebhookService(bots, store, handler, logger);

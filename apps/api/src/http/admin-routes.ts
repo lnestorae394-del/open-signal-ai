@@ -104,13 +104,13 @@ export function buildAdminRoutes(s: Services): Route[] {
     r('GET', '/bots/:botId/webhook', async (ctx) => ok({ webhook: await s.botAdmin.webhookInfo(await actorOf(ctx), botParam(ctx)) })),
     r('DELETE', '/bots/:botId', async (ctx) => ok(await s.botAdmin.remove(await actorOf(ctx), botParam(ctx), ctx.json()))),
     r('GET', '/users', async (ctx) =>
-      ok(await s.insights.allUsers(await actorOf(ctx), { botId: ctx.query.get('botId'), state: ctx.query.get('state'), before: ctx.query.get('before') }))),
+      ok(await s.insights.allUsers(await actorOf(ctx), { botId: ctx.query.get('botId'), state: ctx.query.get('state'), access: ctx.query.get('access'), before: ctx.query.get('before') }))),
     r('GET', '/system', async (ctx) => ok({ system: s.insights.system(await actorOf(ctx), s.indexStatus()) })),
     r('POST', '/bots/:botId/media', async (ctx) => ok({ bot: await s.botAdmin.uploadMedia(await actorOf(ctx), botParam(ctx), ctx.json()) }), { maxBody: 800 * 1024 }),
 
     // ── per-bot data ──
     r('GET', '/bots/:botId/users', async (ctx) =>
-      ok(await s.insights.users(await actorOf(ctx), botParam(ctx), { state: ctx.query.get('state'), before: ctx.query.get('before') }))),
+      ok(await s.insights.users(await actorOf(ctx), botParam(ctx), { state: ctx.query.get('state'), access: ctx.query.get('access'), before: ctx.query.get('before') }))),
     r('GET', '/bots/:botId/stats', async (ctx) => ok({ days: await s.insights.stats(await actorOf(ctx), botParam(ctx), Number(ctx.query.get('days') ?? 14)) })),
     r('GET', '/bots/:botId/logs', async (ctx) => ok({ items: await s.insights.logs(await actorOf(ctx), botParam(ctx), ctx.query.get('type') ?? 'errors') })),
     r('GET', '/bots/:botId/review', async (ctx) => ok({ items: await s.insights.reviewQueue(await actorOf(ctx), botParam(ctx)) })),
@@ -130,6 +130,30 @@ export function buildAdminRoutes(s: Services): Route[] {
       const b = ctx.json() as { telegramId?: unknown; reason?: unknown };
       const user = await s.binding.adminReturnToInput(actor, new TenantScope(botParam(ctx)), { telegramId: Number(b.telegramId), reason: String(b.reason ?? '') });
       return ok({ state: user.bindingState });
+    }),
+    // ── one user: card + manual actions (each: binding.manage, reason, transaction, audit) ──
+    r('GET', '/bots/:botId/users/:telegramId', async (ctx) =>
+      ok({ user: await s.insights.userCard(await actorOf(ctx), botParam(ctx), Number(ctx.params['telegramId'])) })),
+    r('POST', '/bots/:botId/users/:telegramId/manual-access', async (ctx) => {
+      const actor = await actorOf(ctx);
+      const b = ctx.json() as { grant?: unknown; reason?: unknown };
+      if (typeof b.grant !== 'boolean') throw new AppError('VALIDATION_FAILED', 'grant must be true or false');
+      await s.binding.adminSetManualAccess(actor, new TenantScope(botParam(ctx)), { telegramId: Number(ctx.params['telegramId']), grant: b.grant, reason: String(b.reason ?? '') });
+      return ok({ user: await s.insights.userCard(actor, botParam(ctx), Number(ctx.params['telegramId'])) });
+    }),
+    r('POST', '/bots/:botId/users/:telegramId/onboarding-step', async (ctx) => {
+      const actor = await actorOf(ctx);
+      const b = ctx.json() as { step?: unknown; reason?: unknown };
+      await s.binding.adminSetOnboardingStep(actor, new TenantScope(botParam(ctx)), {
+        telegramId: Number(ctx.params['telegramId']), step: String(b.step ?? '') as 'registration' | 'trader_id', reason: String(b.reason ?? ''),
+      });
+      return ok({ user: await s.insights.userCard(actor, botParam(ctx), Number(ctx.params['telegramId'])) });
+    }),
+    r('POST', '/bots/:botId/users/:telegramId/deposit-recheck', async (ctx) => {
+      const actor = await actorOf(ctx);
+      const b = ctx.json() as { reason?: unknown };
+      await s.binding.adminRecheckDeposit(actor, new TenantScope(botParam(ctx)), { telegramId: Number(ctx.params['telegramId']), reason: String(b.reason ?? '') });
+      return ok({ user: await s.insights.userCard(actor, botParam(ctx), Number(ctx.params['telegramId'])) });
     }),
     // ───────── global postback: source, history, integration errors ─────────
     r('GET', '/postback/sources', async (ctx) => ok({ sources: await s.insights.allSources(await actorOf(ctx)) })),

@@ -38,6 +38,14 @@ export function ProfileScreen() {
           </div>
         </section>
 
+        {me!.access?.via === 'manual' && ob.status !== 'completed' ? (
+          <Panel className="px-4 py-4">
+            <div className="text-[14px] font-medium">{t('profile.manualTitle')}</div>
+            <p className="mt-1 text-[13px] leading-relaxed text-muted">{t('profile.manualText')}</p>
+            <Button className="mt-3" variant="secondary" block onClick={() => setTab('connect')}>{t('profile.manualConnect')}</Button>
+          </Panel>
+        ) : null}
+
         <Panel className="os-rows overflow-hidden">
           {rows.map((r) => (
             <div key={r.label} className="flex items-center justify-between gap-4 px-4 py-3.5 text-[14px]">

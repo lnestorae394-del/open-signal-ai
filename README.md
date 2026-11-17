@@ -57,6 +57,7 @@ npm run dev                  # http://localhost:8080/admin/
 - [docs/github-first-push.md](docs/github-first-push.md) — первая загрузка в GitHub
 - [docs/architecture.md](docs/architecture.md) — устройство платформы
 - [docs/account-binding.md](docs/account-binding.md) — онбординг и привязка Telegram ID ↔ Trader ID
+- [docs/manual-access.md](docs/manual-access.md) — карточка пользователя: ручной доступ к сигналам и восстановление онбординга
 - [docs/global-pocket-partners-postback.md](docs/global-pocket-partners-postback.md) — подключение postback Pocket Partners
 - [docs/env-vars.md](docs/env-vars.md) — переменные окружения
 - [docs/TEST-REPORT.md](docs/TEST-REPORT.md) — что проверено и что нет
