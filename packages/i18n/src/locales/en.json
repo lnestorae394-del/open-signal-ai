@@ -128,7 +128,8 @@
     "clickMismatch": "This Trader ID was not registered through your link.",
     "traderIdTaken": "This Trader ID is already linked to another account.",
     "onboardingRequired": "Finish registration first.",
-    "signalCooldown": "You can get the next signal in {seconds} s."
+    "signalCooldown": "You can get the next signal in {seconds} s.",
+    "forexMarketClosed": "Forex market is currently closed. Opens at: {time} (UTC+2)."
   },
   "admin": {
     "title": "Control center",

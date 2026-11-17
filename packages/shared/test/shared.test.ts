@@ -21,27 +21,28 @@ test('catalogue has the 21 requested Forex pairs and a separate OTC category', (
   }
 });
 
-test('forex calendar: closed on Saturday, open on Wednesday, edges at 22:00 UTC', () => {
+test('forex calendar: open weekdays 02:00-22:45 in Pocket Option UTC+2; closed on weekends', () => {
   assert.equal(forexSessionState(new Date('2026-11-14T12:00:00Z')).open, false); // Saturday
-  assert.equal(forexSessionState(new Date('2026-11-18T12:00:00Z')).open, true); // Wednesday
-  assert.equal(forexSessionState(new Date('2026-11-15T21:59:59Z')).open, false); // Sunday before open
-  assert.equal(forexSessionState(new Date('2026-11-15T22:00:00Z')).open, true); // Sunday open
-  assert.equal(forexSessionState(new Date('2026-11-20T21:59:59Z')).open, true); // Friday before close
-  assert.equal(forexSessionState(new Date('2026-11-20T22:00:00Z')).open, false); // Friday close
+  assert.equal(forexSessionState(new Date('2026-11-18T00:00:00Z')).open, true); // Wednesday 02:00 UTC+2
+  assert.equal(forexSessionState(new Date('2026-11-18T20:44:00Z')).open, true); // Wednesday 22:44 UTC+2
+  assert.equal(forexSessionState(new Date('2026-11-18T20:45:00Z')).open, false); // Wednesday 22:45 UTC+2
+  assert.equal(forexSessionState(new Date('2026-11-15T22:00:00Z')).open, false); // Sunday 00:00 UTC+2
+  assert.equal(forexSessionState(new Date('2026-11-20T20:44:00Z')).open, true); // Friday 22:44 UTC+2
+  assert.equal(forexSessionState(new Date('2026-11-20T20:45:00Z')).open, false); // Friday 22:45 UTC+2
 });
 
-test('forex calendar: next state change is computed correctly', () => {
+test('forex calendar: next state change is computed correctly in Pocket Option UTC+2', () => {
   assert.equal(
     forexSessionState(new Date('2026-11-14T12:00:00Z')).nextChangeAt.toISOString(),
-    '2026-11-15T22:00:00.000Z',
+    '2026-11-16T00:00:00.000Z',
   );
   assert.equal(
     forexSessionState(new Date('2026-11-18T12:00:00Z')).nextChangeAt.toISOString(),
-    '2026-11-20T22:00:00.000Z',
+    '2026-11-18T20:45:00.000Z',
   );
   assert.equal(
     forexSessionState(new Date('2026-11-20T23:00:00Z')).nextChangeAt.toISOString(),
-    '2026-11-22T22:00:00.000Z',
+    '2026-11-23T00:00:00.000Z',
   );
 });
 

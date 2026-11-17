@@ -353,6 +353,30 @@ test('signals: settings shared by all bots; BUY/SELL marked as training; open �
   assert.equal((await send()).json.error.code, 'SIGNAL_LIMIT');
 });
 
+test('Forex signals are blocked while the market is closed; OTC remains available', async () => {
+  const h = harness(defaultStore(), new TestClock('2026-11-21T12:00:00.000Z')); // Saturday, 14:00 UTC+2
+  const bot = await seedBot(h.s, 'botForexHours');
+  const src = await seedGlobalSource(h.s);
+  const { token } = await onboard(h, bot, src, 87, '50087000', '25');
+  const auth = { headers: bearer(token) };
+
+  const cfg = (await h.request('GET', `/api/miniapp/${bot.botId}/signals/config`, auth)).json;
+  assert.equal(cfg.forexTimezone, 'UTC+2');
+  assert.equal(cfg.forexSessions.EURUSD.open, false);
+  assert.equal(cfg.forexSessions.EURUSD.nextChangeAt, '2026-11-23T00:00:00.000Z');
+
+  const forex = await h.request('POST', `/api/miniapp/${bot.botId}/signals`, {
+    ...auth, body: { instrumentId: 'EURUSD', periodSec: 60 },
+  });
+  assert.equal(forex.status, 409);
+  assert.equal(forex.json.error.code, 'FOREX_MARKET_CLOSED');
+
+  const otc = await h.request('POST', `/api/miniapp/${bot.botId}/signals`, {
+    ...auth, body: { instrumentId: 'EURUSD_OTC', periodSec: 60 },
+  });
+  assert.equal(otc.status, 201);
+});
+
 // ───────────────────────── academy (shared by every bot) ─────────────────────────
 
 test('academy: one catalogue for all bots (starter course until edited), progress per user in the database', async () => {

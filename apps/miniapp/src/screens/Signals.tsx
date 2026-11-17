@@ -8,6 +8,16 @@ import { useApp } from '../state.tsx';
 
 const symbolOf = (id: string) => findInstrument(id)?.symbol.replace(' OTC', '') ?? id;
 
+function formatForexOpening(iso: string, locale: string): string {
+  const brokerTime = new Date(Date.parse(iso) + 2 * 60 * 60 * 1000);
+  return new Intl.DateTimeFormat(locale, {
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'UTC',
+  }).format(brokerTime);
+}
+
 function PairDots({ id, size = 32 }: { id: string; size?: number }) {
   const inst = findInstrument(id);
   const fs = size < 30 ? 8.5 : 9.5;
@@ -47,7 +57,7 @@ type Flow = { kind: 'idle' } | { kind: 'analyzing' } | { kind: 'result'; signal:
 const MIN_ANALYSIS_MS = 1600;
 
 export function SignalsScreen() {
-  const { t, config, botId, token, favorites } = useApp();
+  const { t, lang, config, botId, token, favorites } = useApp();
   const periodLabel = usePeriodLabel();
   const [cfg, setCfg] = useState<SignalConfig | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -85,19 +95,43 @@ export function SignalsScreen() {
   const get = async () => {
     if (!botId || !token || !instrument || !period) return;
     setError(null);
-    setFlow({ kind: 'analyzing' });
-    haptic();
     const started = Date.now();
     try {
+      if (findInstrument(instrument)?.market === 'forex') {
+        const freshConfig = await api.signalConfig(botId, token);
+        setCfg(freshConfig);
+        const session = freshConfig.forexSessions[instrument];
+        if (session && !session.open) {
+          setError(t('errors.forexMarketClosed', { time: formatForexOpening(session.nextChangeAt, LOCALE[lang]) }));
+          setFlow({ kind: 'idle' });
+          haptic('error');
+          return;
+        }
+      }
+      setFlow({ kind: 'analyzing' });
+      haptic();
+      const analysisStarted = Date.now();
       const { signal } = await api.createSignal(botId, token, instrument, period);
       // Short, honest pause for the transition; the decision itself is instant.
-      await new Promise((r) => setTimeout(r, Math.max(0, MIN_ANALYSIS_MS - (Date.now() - started))));
+      await new Promise((r) => setTimeout(r, Math.max(0, MIN_ANALYSIS_MS - (Date.now() - analysisStarted))));
       setFlow({ kind: 'result', signal });
       haptic('success');
     } catch (e) {
       const code = e instanceof ApiError ? e.code : 'NETWORK';
       const wait = e instanceof ApiError ? (e.payload as { error?: { retryAfterSec?: number } } | null)?.error?.retryAfterSec : undefined;
-      setError(t(errorKey(code), { seconds: wait ?? cfg?.cooldownSec ?? 30 }));
+      let closedSession = code === 'FOREX_MARKET_CLOSED' ? cfg?.forexSessions?.[instrument] : null;
+      if (code === 'FOREX_MARKET_CLOSED' && botId && token) {
+        try {
+          const latest = await api.signalConfig(botId, token);
+          setCfg(latest);
+          closedSession = latest.forexSessions[instrument] ?? closedSession;
+        } catch {
+          // Keep the most recent known opening time if a follow-up refresh fails.
+        }
+      }
+      setError(code === 'FOREX_MARKET_CLOSED'
+        ? t('errors.forexMarketClosed', { time: closedSession ? formatForexOpening(closedSession.nextChangeAt, LOCALE[lang]) : '—' })
+        : t(errorKey(code), { seconds: wait ?? cfg?.cooldownSec ?? 30 }));
       setFlow({ kind: 'idle' });
       haptic('error');
     }

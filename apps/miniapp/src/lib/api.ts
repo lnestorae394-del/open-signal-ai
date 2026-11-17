@@ -62,6 +62,8 @@ export interface SignalConfig {
   periods: number[];
   defaultPeriod: number;
   cooldownSec: number;
+  forexTimezone: string;
+  forexSessions: Record<string, { open: boolean; nextChangeAt: string; opensAt: string; closesAt: string }>;
 }
 
 export interface Signal {
@@ -179,6 +181,7 @@ export function errorKey(code: string): string {
     PARTNER_LINK_MISSING: 'errors.partnerLinkMissing',
     SIGNAL_COOLDOWN: 'errors.signalCooldown',
     SIGNAL_LIMIT: 'errors.signalLimit',
+    FOREX_MARKET_CLOSED: 'errors.forexMarketClosed',
   };
   return map[code] ?? 'errors.generic';
 }

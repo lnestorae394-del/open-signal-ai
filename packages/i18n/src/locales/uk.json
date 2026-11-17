@@ -128,7 +128,8 @@
     "clickMismatch": "Цей Trader ID зареєстровано не за вашим посиланням.",
     "traderIdTaken": "Цей Trader ID уже прив’язано до іншого акаунта.",
     "onboardingRequired": "Спершу завершіть реєстрацію.",
-    "signalCooldown": "Наступний сигнал можна отримати через {seconds} с."
+    "signalCooldown": "Наступний сигнал можна отримати через {seconds} с.",
+    "forexMarketClosed": "Ринок Forex зараз закритий. Відкриється: {time} (UTC+2)."
   },
   "admin": {
     "title": "Центр керування",
