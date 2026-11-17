@@ -182,7 +182,6 @@ export function errorKey(code: string): string {
     SIGNAL_COOLDOWN: 'errors.signalCooldown',
     SIGNAL_LIMIT: 'errors.signalLimit',
     FOREX_MARKET_CLOSED: 'errors.forexMarketClosed',
-    FOREX_SESSION_ENDS_SOON: 'errors.forexSessionEndsSoon',
   };
   return map[code] ?? 'errors.generic';
 }
