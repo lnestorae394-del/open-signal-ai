@@ -1,4 +1,5 @@
 import { hasSignalAccess } from '../binding/access.ts';
+import { forexSessionState, POCKET_OPTION_TIMEZONE } from '@open-signal/shared';
 import { randomBytes } from 'node:crypto';
 import { FOREX_INSTRUMENTS, OTC_INSTRUMENTS, type SignalCategory, type SignalEngineKind, type SignalSettings } from '@open-signal/shared';
 import { AppError } from '../lib/errors.ts';
@@ -44,6 +45,8 @@ export interface SignalConfigView {
   periods: number[];
   defaultPeriod: number;
   cooldownSec: number;
+  forexTimezone: string;
+  forexSessions: Record<string, { open: boolean; nextChangeAt: string; opensAt: string; closesAt: string }>;
 }
 
 const categoryOf = (id: string, s: SignalSettings): SignalCategory | null =>
@@ -63,6 +66,7 @@ export class SignalService {
 
   async config(): Promise<SignalConfigView> {
     const s = await this.d.settings.signals();
+    const now = this.d.now();
     return {
       engine: this.d.engine.kind,
       categories: [
@@ -72,12 +76,31 @@ export class SignalService {
       periods: s.periods,
       defaultPeriod: s.defaultPeriod,
       cooldownSec: s.cooldownSec,
+      forexTimezone: POCKET_OPTION_TIMEZONE,
+      forexSessions: Object.fromEntries(s.forexInstruments.map((id) => {
+        const session = forexSessionState(now, id);
+        return [id, { open: session.open, nextChangeAt: session.nextChangeAt.toISOString(), opensAt: session.opensAt, closesAt: session.closesAt }];
+      })),
     };
   }
 
   /** Signals are available only after onboarding or with manual access from an admin (server-side check, not a UI flag). */
   private requireOnboarded(user: UserRecord): void {
     if (!hasSignalAccess(user)) throw new AppError('ONBOARDING_REQUIRED');
+  }
+
+  private requireForexSession(instrumentId: string, periodSec: number, now: Date): void {
+    const session = forexSessionState(now, instrumentId);
+    if (!session.open) {
+      throw new AppError('FOREX_MARKET_CLOSED', 'Forex instrument is outside the Pocket Option trading schedule', {
+        nextChangeAt: session.nextChangeAt.toISOString(), timezone: POCKET_OPTION_TIMEZONE,
+      });
+    }
+    if (now.getTime() + periodSec * 1000 > session.nextChangeAt.getTime()) {
+      throw new AppError('FOREX_SESSION_ENDS_SOON', 'The selected expiry would cross the Forex session close', {
+        nextChangeAt: session.nextChangeAt.toISOString(), timezone: POCKET_OPTION_TIMEZONE,
+      });
+    }
   }
 
   async issue(scope: TenantScope, user: UserRecord, raw: { instrumentId?: unknown; periodSec?: unknown }): Promise<SignalView> {
@@ -88,6 +111,7 @@ export class SignalService {
     const category = categoryOf(instrumentId, s);
     if (!category) throw new AppError('BAD_REQUEST', 'unknown instrument');
     if (!s.periods.includes(periodSec)) throw new AppError('BAD_REQUEST', 'unsupported period');
+    if (category === 'forex') this.requireForexSession(instrumentId, periodSec, this.d.now());
 
     const uid = scope.userDocId(user.telegramId);
     const now = this.d.now();
@@ -131,6 +155,7 @@ export class SignalService {
       const r = await tx.get<SignalRecord>(C.signals, signalId);
       if (!r || !scope.owns(r) || r.userDocId !== uid) throw new AppError('NOT_FOUND');
       if (r.openedAt) return r; // idempotent
+      if (r.category === 'forex') this.requireForexSession(r.instrumentId, r.periodSec, new Date(nowIso));
       const expiresAt = new Date(Date.parse(nowIso) + r.periodSec * 1000).toISOString();
       tx.update(C.signals, signalId, { openedAt: nowIso, expiresAt });
       return { ...r, openedAt: nowIso, expiresAt };

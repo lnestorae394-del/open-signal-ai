@@ -8,6 +8,19 @@ import { useApp } from '../state.tsx';
 
 const symbolOf = (id: string) => findInstrument(id)?.symbol.replace(' OTC', '') ?? id;
 
+function selectableInstrumentIds(cfg: SignalConfig): string[] {
+  return cfg.categories.flatMap((c) => c.instruments).filter((id) =>
+    findInstrument(id)?.market !== 'forex' || cfg.forexSessions?.[id]?.open !== false,
+  );
+}
+
+function pocketTime(iso: string, locale: string): string {
+  const shifted = new Date(Date.parse(iso) + 2 * 60 * 60 * 1000);
+  return new Intl.DateTimeFormat(locale, {
+    weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
+  }).format(shifted);
+}
+
 function PairDots({ id, size = 32 }: { id: string; size?: number }) {
   const inst = findInstrument(id);
   const fs = size < 30 ? 8.5 : 9.5;
@@ -66,12 +79,13 @@ export function SignalsScreen() {
         const [c, recent] = await Promise.all([api.signalConfig(botId, token), api.signals(botId, token, 1)]);
         if (!alive) return;
         setCfg(c);
-        const all = c.categories.flatMap((x) => x.instruments);
+        const available = selectableInstrumentIds(c);
         const last = recent.signals[0];
-        setInstrument(last && all.includes(last.instrumentId) ? last.instrumentId : (all.find((id) => favorites.includes(id)) ?? all[0] ?? null));
+        const lastCanBeContinued = last && (last.status === 'open' || available.includes(last.instrumentId));
+        setInstrument(lastCanBeContinued ? last.instrumentId : (available.find((id) => favorites.includes(id)) ?? available[0] ?? null));
         setPeriod(last && c.periods.includes(last.periodSec) ? last.periodSec : c.defaultPeriod);
         if (last?.status === 'open') setFlow({ kind: 'running', signal: last });
-        else if (last?.status === 'issued' && Date.now() - Date.parse(last.createdAt) < 10 * 60_000) setFlow({ kind: 'result', signal: last });
+        else if (lastCanBeContinued && last?.status === 'issued' && Date.now() - Date.parse(last.createdAt) < 10 * 60_000) setFlow({ kind: 'result', signal: last });
       } catch (e) {
         if (alive) setLoadError(t(errorKey(e instanceof ApiError ? e.code : 'NETWORK')));
       }
@@ -81,6 +95,26 @@ export function SignalsScreen() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [botId, token]);
+
+  // Refresh the broker schedule while the Mini App remains open. The API is
+  // authoritative; OTC remains selectable even when every Forex pair is closed.
+  useEffect(() => {
+    if (!botId || !token) return;
+    const id = setInterval(() => {
+      void api.signalConfig(botId, token).then((next) => {
+        setCfg(next);
+        setInstrument((current) => {
+          const currentOpen = current && (
+            findInstrument(current)?.market !== 'forex' || next.forexSessions?.[current]?.open !== false
+          );
+          if (currentOpen) return current;
+          const available = selectableInstrumentIds(next);
+          return available.find((pair) => favorites.includes(pair)) ?? available[0] ?? null;
+        });
+      }).catch(() => undefined);
+    }, 30_000);
+    return () => clearInterval(id);
+  }, [botId, token, favorites]);
 
   const get = async () => {
     if (!botId || !token || !instrument || !period) return;
@@ -130,11 +164,22 @@ export function SignalsScreen() {
   if (!config) return null;
   const training = cfg?.engine !== 'analysis';
   const busy = flow.kind !== 'idle';
+  const forexSessions = Object.values(cfg?.forexSessions ?? {});
+  const anyForexOpen = forexSessions.some((session) => session.open);
+  const nextForexOpen = forexSessions.filter((session) => !session.open)
+    .map((session) => session.nextChangeAt).sort()[0];
 
   return (
     <div>
       <Header title={config.miniAppTitle} />
       <div className="flex flex-col gap-5 px-4 pt-3">
+        {cfg ? (
+          <p className="rounded-xl bg-white/[0.045] px-3 py-2.5 text-[12px] leading-relaxed text-muted">
+            {anyForexOpen
+              ? t('sig.forexOpenStatus')
+              : t('sig.forexClosedStatus', { time: nextForexOpen ? pocketTime(nextForexOpen, LOCALE[lang]) : '—' })}
+          </p>
+        ) : null}
         {loadError ? (
           <p className="px-1 text-[14px] text-danger">{loadError}</p>
         ) : !cfg || !instrument || !period ? (
@@ -194,7 +239,7 @@ export function SignalsScreen() {
             </section>
 
             <div>
-              <Button size="lg" block disabled={busy} onClick={() => void get()}>{t('sig.get')}</Button>
+              <Button size="lg" block disabled={busy || Boolean(instrument && findInstrument(instrument)?.market === 'forex' && cfg.forexSessions?.[instrument]?.open === false)} onClick={() => void get()}>{t('sig.get')}</Button>
               {error ? <p className="mt-2 px-1 text-[13px] text-danger">{error}</p> : null}
             </div>
 
@@ -210,6 +255,7 @@ export function SignalsScreen() {
       {picker && cfg ? (
         <PairSheet
           categories={cfg.categories}
+          forexSessions={cfg.forexSessions}
           selected={instrument}
           onPick={(id) => {
             setInstrument(id);
@@ -224,17 +270,22 @@ export function SignalsScreen() {
 }
 
 /** Full-height sheet: Forex / OTC / Favorites, search, a scrolling list that never leaves the screen. */
-function PairSheet({ categories, selected, onPick, onClose }: { categories: SignalConfig['categories']; selected: string | null; onPick: (id: string) => void; onClose: () => void }) {
-  const { t, favorites, toggleFavorite } = useApp();
+function PairSheet({ categories, forexSessions, selected, onPick, onClose }: { categories: SignalConfig['categories']; forexSessions: SignalConfig['forexSessions']; selected: string | null; onPick: (id: string) => void; onClose: () => void }) {
+  const { t, lang, favorites, toggleFavorite } = useApp();
   const initial = (findInstrument(selected ?? '')?.market as SignalCategory | undefined) ?? categories[0]?.id ?? 'forex';
   const [tab, setTab] = useState<SignalCategory | 'favorites'>(initial);
   const [q, setQ] = useState('');
   const all = useMemo(() => categories.flatMap((c) => c.instruments), [categories]);
+  const isAvailable = (id: string) => findInstrument(id)?.market !== 'forex' || forexSessions?.[id]?.open !== false;
+  const openForexCount = (categories.find((c) => c.id === 'forex')?.instruments ?? []).filter(isAvailable).length;
+  const nextForexOpen = Object.values(forexSessions ?? {}).filter((session) => !session.open)
+    .map((session) => session.nextChangeAt).sort()[0];
   const list = useMemo(() => {
     const base = tab === 'favorites' ? all.filter((id) => favorites.includes(id)) : (categories.find((c) => c.id === tab)?.instruments ?? []);
+    const available = base.filter(isAvailable);
     const needle = q.trim().toUpperCase().replace(/[\s/]/g, '');
-    return needle ? base.filter((id) => id.replace('_OTC', '').includes(needle)) : base;
-  }, [tab, q, all, categories, favorites]);
+    return needle ? available.filter((id) => id.replace('_OTC', '').includes(needle)) : available;
+  }, [tab, q, all, categories, favorites, forexSessions]);
 
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-bg/95 backdrop-blur-xl" role="dialog" aria-modal="true" aria-label={t('sig.pair')}>
@@ -296,7 +347,11 @@ function PairSheet({ categories, selected, onPick, onClose }: { categories: Sign
               })}
             </ul>
           ) : (
-            <p className="px-2 py-10 text-center text-[14px] text-muted">{tab === 'favorites' && !q ? t('pairs.favoritesEmpty') : t('pairs.nothingFound')}</p>
+            <p className="px-2 py-10 text-center text-[14px] text-muted">
+              {tab === 'forex' && !q && openForexCount === 0
+                ? t('sig.forexTabClosed', { time: nextForexOpen ? pocketTime(nextForexOpen, LOCALE[lang]) : '—' })
+                : tab === 'favorites' && !q ? t('pairs.favoritesEmpty') : t('pairs.nothingFound')}
+            </p>
           )}
         </div>
       </div>

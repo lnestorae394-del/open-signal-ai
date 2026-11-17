@@ -1,49 +1,95 @@
 /**
- * Forex trading-week calendar.
+ * Pocket Option Forex asset schedule.
  *
- * Retail spot FX trades continuously from Sunday ~22:00 UTC to Friday ~22:00 UTC.
- * This function is a deterministic calendar rule, not market data. It does NOT
- * know about bank holidays or liquidity gaps: the UI labels it accordingly and
- * the market-data provider's own market state (Stage 4) takes precedence.
+ * The Pocket Option asset schedule is published in fixed server time UTC+2.
+ * Most Forex pairs: Mon-Fri 02:00-22:45. GBP/CAD and GBP/CHF: Mon-Fri
+ * 04:10-22:45. Regular Forex pairs are closed on Saturday and Sunday.
+ *
+ * This is a schedule gate, not a live broker-status feed: exceptional holidays,
+ * asset suspensions and temporary broker maintenance can still differ.
+ * OTC instruments deliberately do not use this calendar.
  */
-export const FOREX_OPEN_UTC = { weekday: 0, hour: 22 } as const; // Sunday 22:00 UTC
-export const FOREX_CLOSE_UTC = { weekday: 5, hour: 22 } as const; // Friday 22:00 UTC
+const HOUR = 3_600_000;
+const MINUTE = 60_000;
+const DAY = 24 * HOUR;
+const POCKET_OPTION_UTC_OFFSET_MS = 2 * HOUR;
+
+export const POCKET_OPTION_TIMEZONE = 'UTC+2';
+export const FOREX_OPEN_MINUTE = 2 * 60;
+export const FOREX_LATE_OPEN_MINUTE = 4 * 60 + 10;
+export const FOREX_CLOSE_MINUTE = 22 * 60 + 45;
+
+const LATE_OPENING_INSTRUMENTS = new Set(['GBPCAD', 'GBPCHF']);
 
 export interface ForexSessionState {
   open: boolean;
-  /** Next change of state (open → close or close → open), UTC. */
+  /** Next open/close transition, returned as an absolute UTC Date. */
   nextChangeAt: Date;
+  /** Pocket Option server-clock opening time, HH:mm. */
+  opensAt: string;
+  /** Pocket Option server-clock closing time, HH:mm. */
+  closesAt: string;
+  timezone: typeof POCKET_OPTION_TIMEZONE;
 }
 
-const HOUR = 3_600_000;
-const WEEK = 7 * 24 * HOUR;
-
-/** Milliseconds since Sunday 00:00 UTC of the current week. */
-function weekOffset(d: Date): number {
-  return (
-    d.getUTCDay() * 24 * HOUR +
-    d.getUTCHours() * HOUR +
-    d.getUTCMinutes() * 60_000 +
-    d.getUTCSeconds() * 1000 +
-    d.getUTCMilliseconds()
-  );
+function clockLabel(totalMinutes: number): string {
+  const h = Math.floor(totalMinutes / 60).toString().padStart(2, '0');
+  const m = (totalMinutes % 60).toString().padStart(2, '0');
+  return `${h}:${m}`;
 }
 
-export function forexSessionState(now: Date = new Date()): ForexSessionState {
-  const offset = weekOffset(now);
-  const openAt = FOREX_OPEN_UTC.weekday * 24 * HOUR + FOREX_OPEN_UTC.hour * HOUR;
-  const closeAt = FOREX_CLOSE_UTC.weekday * 24 * HOUR + FOREX_CLOSE_UTC.hour * HOUR;
-  const weekStart = now.getTime() - offset;
-
-  // Weeks start on Sunday 00:00 UTC, so the open window is [Sun 22:00, Fri 22:00).
-  const open = offset >= openAt && offset < closeAt;
-  let next: number;
-  if (open) {
-    next = weekStart + closeAt;
-  } else if (offset < openAt) {
-    next = weekStart + openAt; // Sunday before the open
-  } else {
-    next = weekStart + WEEK + openAt; // after Friday close → next Sunday
+function nextWeekdayOffset(day: number): number {
+  // day: Sunday=0 ... Saturday=6. Return the next Monday-Friday offset.
+  for (let offset = 1; offset <= 7; offset++) {
+    const candidate = (day + offset) % 7;
+    if (candidate >= 1 && candidate <= 5) return offset;
   }
-  return { open, nextChangeAt: new Date(next) };
+  return 1;
+}
+
+/**
+ * Returns the market session for a Forex instrument using Pocket Option's
+ * published UTC+2 server clock. Unknown Forex instruments use the standard
+ * 02:00 opening time; known GBP/CAD and GBP/CHF use 04:10.
+ */
+export function forexSessionState(now: Date = new Date(), instrumentId = 'EURUSD'): ForexSessionState {
+  const openMinute = LATE_OPENING_INSTRUMENTS.has(instrumentId.toUpperCase())
+    ? FOREX_LATE_OPEN_MINUTE
+    : FOREX_OPEN_MINUTE;
+
+  // Shift the instant into Pocket Option's fixed UTC+2 wall clock. Using a fixed
+  // offset is intentional: the broker labels its schedule as server time UTC+2.
+  const serverNow = new Date(now.getTime() + POCKET_OPTION_UTC_OFFSET_MS);
+  const weekday = serverNow.getUTCDay();
+  const minuteOfDay = serverNow.getUTCHours() * 60 + serverNow.getUTCMinutes();
+  const serverDayStartUtc = Date.UTC(serverNow.getUTCFullYear(), serverNow.getUTCMonth(), serverNow.getUTCDate())
+    - POCKET_OPTION_UTC_OFFSET_MS;
+
+  const weekdayOpen = weekday >= 1 && weekday <= 5;
+  const open = weekdayOpen && minuteOfDay >= openMinute && minuteOfDay < FOREX_CLOSE_MINUTE;
+
+  let nextChangeAt: Date;
+  if (open) {
+    nextChangeAt = new Date(serverDayStartUtc + FOREX_CLOSE_MINUTE * MINUTE);
+  } else {
+    let daysAhead: number;
+    if (weekday === 0) {
+      daysAhead = 1; // Sunday -> Monday
+    } else if (weekday === 6) {
+      daysAhead = 2; // Saturday -> Monday
+    } else if (minuteOfDay < openMinute) {
+      daysAhead = 0; // before today's opening
+    } else {
+      daysAhead = nextWeekdayOffset(weekday); // after close -> next weekday
+    }
+    nextChangeAt = new Date(serverDayStartUtc + daysAhead * DAY + openMinute * MINUTE);
+  }
+
+  return {
+    open,
+    nextChangeAt,
+    opensAt: clockLabel(openMinute),
+    closesAt: clockLabel(FOREX_CLOSE_MINUTE),
+    timezone: POCKET_OPTION_TIMEZONE,
+  };
 }
